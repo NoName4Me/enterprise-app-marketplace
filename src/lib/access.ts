@@ -1,4 +1,17 @@
-export type AccountPermissions={disabled:boolean;isAdmin:boolean;canCreateApp:boolean};
-export function mayUseMarketplace(u:AccountPermissions|null){return u!==null && !u.disabled;}
-export function mayCreateApp(u:AccountPermissions|null){return mayUseMarketplace(u)&&Boolean(u?.canCreateApp);}
-export function mayReviewApp(u:AccountPermissions|null){return mayUseMarketplace(u)&&Boolean(u?.isAdmin);}
+export type AccountPermissions = {
+  banned: boolean | null;
+  role: string | null;
+  canCreateApp: boolean;
+};
+
+export function mayUseMarketplace(account: AccountPermissions | null): boolean {
+  return account !== null && account.banned !== true;
+}
+
+export function mayCreateApp(account: AccountPermissions | null): boolean {
+  return mayUseMarketplace(account) && Boolean(account?.canCreateApp);
+}
+
+export function mayReviewApp(account: AccountPermissions | null): boolean {
+  return mayUseMarketplace(account) && account?.role?.split(",").includes("admin") === true;
+}

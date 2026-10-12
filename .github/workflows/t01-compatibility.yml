@@ -1,18 +1,20 @@
-name: T01 compatibility
+name: T01 compatibility and auth verification
 on:
   push:
     branches: [feat/stage1-t01-foundation]
   pull_request:
     branches: [master]
+
 permissions:
   contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:16
-        env: {POSTGRES_USER: market, POSTGRES_PASSWORD: testonly, POSTGRES_DB: market_test}
+        env: { POSTGRES_USER: market, POSTGRES_PASSWORD: testonly, POSTGRES_DB: market_test }
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U market -d market_test"
@@ -25,28 +27,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with: {version: 10.17.1}
+        with: { version: 10.17.1 }
       - uses: actions/setup-node@v4
-        with: {node-version: "22"}
-      - name: Resolve dependencies for spike
+        with: { node-version: "22" }
+      - name: Install with locked dependencies
         run: pnpm install --frozen-lockfile
-      - name: Generate and apply candidate migration
+      - name: Generate and apply migration
         run: |
           pnpm db:generate
           pnpm db:migrate
-      - name: Generate Better Auth reference schema for review
+      - name: Generate auth schema reference
         run: pnpm dlx auth@1.7.6 generate --adapter drizzle --dialect postgresql --config ./src/lib/auth.ts --output ./auth-schema.generated.ts --yes
-      - name: Upload auth schema reference
+      - name: Upload generated auth reference
         uses: actions/upload-artifact@v4
         with:
           name: better-auth-reference-schema
           path: auth-schema.generated.ts
-          if-no-files-found: error
-      - name: Ensure lockfile and generated migrations have no drift
+      - name: Verify tracked schema and lock files
         run: git diff --exit-code -- pnpm-lock.yaml drizzle/
-      - name: Validate database auth boundaries
+      - name: Run PostgreSQL integration tests
         run: pnpm test:db
-      - name: Validate source
+      - name: Type, lint, unit and build
         run: |
           pnpm typecheck
           pnpm lint
