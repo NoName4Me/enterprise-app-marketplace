@@ -24,3 +24,9 @@
 - 审查通过后 squash merge，在 master 上保留一个语义清晰的提交。
 
 参考 Issue #2、docs/engineering/AGENT_TASK_01.md。
+
+## 2026-10-13 CI 证据
+
+- [首次兼容性 CI 成功](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38278705629)：安装、迁移、typecheck、lint、单元测试、构建均通过。
+- [后续兼容性 CI](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38279185507)：新增数据库集成测试通过；单测脚本由于匹配到 integration 测试而错误退出，已修正测试隔离范围并安排冻结锁文件复验。
+- 以上通过项均不代表登录成功、账号停用等端到端验收完成。

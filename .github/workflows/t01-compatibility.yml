@@ -29,11 +29,13 @@ jobs:
       - uses: actions/setup-node@v4
         with: {node-version: "22"}
       - name: Resolve dependencies for spike
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
       - name: Generate and apply candidate migration
         run: |
           pnpm db:generate
           pnpm db:migrate
+      - name: Ensure lockfile and generated migrations have no drift
+        run: git diff --exit-code -- pnpm-lock.yaml drizzle/
       - name: Validate database auth boundaries
         run: pnpm test:db
       - name: Validate source
@@ -42,12 +44,3 @@ jobs:
           pnpm lint
           pnpm test
           pnpm build
-      - name: Upload lockfile and migration for review
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: t01-candidate-artifacts
-          path: |
-            pnpm-lock.yaml
-            drizzle/
-          if-no-files-found: warn
