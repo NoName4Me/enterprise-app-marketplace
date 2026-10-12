@@ -7,11 +7,11 @@
 - [x] 明确企业应用市场定位、目标角色及 Web 应用首版范围。
 - [x] 明确审核、更新复审、公开可见性及 AI 应用发现边界。
 - [x] 建立公共代码仓库，保存 PRD 和产品决策。
-- [ ] 细化首个闭环的验收用例、页面与权限矩阵。
-- [ ] 评审技术架构、数据模型、开发与部署方案。
-- [ ] 为 AI Coding Agent 编写少量可执行的仓库级规则。
+- [x] 细化首个闭环的验收用例、页面与权限矩阵（[权限矩阵](design/PERMISSIONS.md)、[验收案例](acceptance/MVP1.md)）。
+- [x] 形成技术架构、数据模型、开发与部署方案（[架构](design/ARCHITECTURE.md)、[状态模型](design/PUBLISHING_MODEL.md)、[ADR-001](decisions/ADR-001-technical-baseline.md)、[交付回退](engineering/DELIVERY.md)）。
+- [x] 为 AI Coding Agent 编写少量可执行的仓库级规则（[AGENTS.md](../AGENTS.md)、[任务包](engineering/AGENT_TASK_01.md)）。
 
-**交付判定**：第一轮工程任务边界清楚、验收可执行、关键技术风险有处理策略。
+**阶段 0 交付判定：已完成文档设计。** 第一轮任务边界、验收案例、架构与风险处理方案已建立；所有自动化测试标记 NOT RUN。下一步执行技术兼容性 Spike 和迭代开发，不将设计完成误写为实现完成。
 
 ## 阶段 1：从零到一的最小可运行闭环
 
