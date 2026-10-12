@@ -1,36 +1,45 @@
-# T01 状态：依赖和迁移兼容性通过，完整身份闭环待验收
+# T01 实施与验证记录
 
-本分支是一个兼容性 Spike（技术试验），**不是已验证的业务 MVP**。
+状态：**技术骨架和数据库兼容性验证通过；完整登录与管理员初始化尚待完成**。本分支为 Draft PR #3，不代表业务 MVP 已交付。
 
-## 范围
-- 同源 Next.js + TypeScript 基础、登录/退出 UI、服务端会话读取；
-- Better Auth (关闭公开注册) + Drizzle + PostgreSQL 候选集成；
-- Docker Compose 开发库、最小访问权限判定及单测；
-- CI 验证安装、生成并执行候选迁移、TypeScript、Lint、测试、构建。
+## 已实现
 
-## 已知限制
-- 提交环境不能访问 npm registry，尚未执行本地依赖安装与编译；
-- 已由隔离 GitHub Actions 生成并提交 pnpm-lock.yaml 与版本化 drizzle/ 迁移；完整登录、管理员初始化等验收仍未完成，不可直接合并；
-- 尚未实现管理员初始化、员工账号开通、禁用会话集成验证、业务登记或审批；
-- 登录页依赖下一任务建立的管理员和员工账号，在此之前不能实际登录。
+- 同源 Next.js + TypeScript Web 工程及独立登录页；
+- Better Auth 邮箱密码登录 API 和客户端表单、公开注册关闭；
+- PostgreSQL + Drizzle 数据访问层、开发 Compose 和初始版本化 SQL 迁移；
+- 认证表结构按 Better Auth 1.7.6 官方 CLI 生成结果校正，包含关联索引、relations、updatedAt 行为；
+- `pnpm-lock.yaml` 锁定完整传递依赖；
+- 服务端检查活跃 session + 账号禁用状态的最小入口（尚未覆盖所有后续 API）；
+- 最小权限策略单元测试、匿名注册数据库集成测试；
+- GitHub Actions 包含冻结锁文件、迁移生成无漂移、真实 PostgreSQL 迁移、测试和构建。
 
-## T01 合并闸门
-- [x] 冻结锁文件 CI 成功且日志可复核；
-- [ ] 校验认证 schema：`auth@1.7.6 check schema` 对当前 Drizzle adapter 报 `Schema validation is not available`（不等于 schema 正确）。已改为生成官方参考 schema 并与现有结构对比；真实认证写入/会话集成测试仍需扩充。
-- [x] 已补齐 pnpm-lock.yaml 与 drizzle/ 迁移文件，冻结锁文件 CI 验证成功；
-- [ ] 匿名注册拒绝的 DB 集成测试已通过；登录/退出、真实会话及停用账号拒绝仍待覆盖；
-- 重跑 typecheck、lint、test、build 和数据库迁移；
-- 对每项验收标记 PASSED / FAILED / NOT RUN，禁止凭生成代码宣称完成；
-- 审查通过后 squash merge，在 master 上保留一个语义清晰的提交。
+## 已验证证据
 
-参考 Issue #2、docs/engineering/AGENT_TASK_01.md。
+| 内容 | 状态 | 证据 |
+| --- | --- | --- |
+| 基础依赖安装、迁移生成与应用 | PASS | [首次 CI](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38278705629) |
+| 单元测试配置问题修复 | PASS | [冻结锁文件 CI](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38279380263) |
+| 禁止匿名注册的 DB 集成测试 | PASS | [冻结锁文件 CI](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38279380263) |
+| 完整类型检查、Lint、单元测试和构建 | PASS | [冻结锁文件 CI](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38279380263) |
+| Better Auth 生成参考 schema | PASS | [官方 schema 生成 CI](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38279805002) |
+| 官方 `auth check schema` 对 Drizzle | UNSUPPORTED | [实测记录](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38279575871)；工具明确报告当前适配器不支持检查，不能将此解释为 schema 已验证 |
+| 初始迁移与官方 schema 差异修正 | 已提交、最终回归待验证 | 功能分支，最新 CI |
 
-## 2026-10-13 CI 证据
+## 尚未通过的验收
 
-- [首次兼容性 CI 成功](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38278705629)：安装、迁移、typecheck、lint、单元测试、构建均通过。
-- [后续兼容性 CI](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38279185507)：新增数据库集成测试通过；单测脚本由于匹配到 integration 测试而错误退出，已修正测试隔离范围并安排冻结锁文件复验。
-- 以上通过项均不代表登录成功、账号停用等端到端验收完成。
+- [ ] 安全的一次性管理员初始化及员工账号开通。
+- [ ] 真实用户登录 → 会话持久 → 退出及失效的 API/E2E 测试。
+- [ ] 停用账号后旧 Session 不再可用、权限撤销实时生效的集成测试。
+- [ ] Better Auth 与 Drizzle 的完整认证读写路径验证，包括负面案例。
+- [ ] 建立并验证可复现的本地运行与数据库迁移说明；补充需要的依赖安全审查。
+- [ ] 依据全部验收标准做独立评审。
 
-- [冻结锁文件及数据库集成测试 CI 成功](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38279380263)：包含迁移无漂移、禁止匿名注册数据库集成测试、typecheck、lint、unit、build。
+## 约束与后续
 
-- [官方 schema check 的失败记录](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38279575871)：CLI 因当前适配器无法提供检查而退出 2；不能当作字段校验失败，也不能当作验收通过。
+当前公开注册禁用，**没有管理员或员工初始化工具**，因此登录 UI 暂无有效测试用户。不能向用户宣传已经具备可交付的账户系统。
+
+首次的 Better Auth schema 是人工编写的，虽能迁移、构建和禁止公开注册，却遗漏了关联索引和更新时间规则；官方 CLI 生成参考后已修正为一致结构。这是对“运行成功不等于设计正确”的一次实际案例。
+
+下一步先实现受控管理员初始化、账号开通、认证集成测试。项目还不包含应用上架和审批业务。
+
+Git 合并规则：本功能分支即使经历若干修复提交，合并到 `master` 时采用 squash，形成单个逻辑提交；不改写已发布 `master` 历史。
