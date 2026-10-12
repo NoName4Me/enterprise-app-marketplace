@@ -8,10 +8,10 @@
 
 ```sh
 pnpm db:migrate
-pnpm dlx auth@1.7.6 create-admin --config ./src/lib/auth.ts --email admin@example.com --name Admin
+node scripts/bootstrap-admin.mjs --email admin@example.com --name Admin
 ```
 
-CLI 若支持交互会要求输入密码。**不要**使用 `--password <secret>` 传真实密码；不要在生产数据库调用 `--force`、`--yes` 绕过已有用户的确认。
+脚本会使用 PostgreSQL advisory lock 保证初始化互斥，并在调用官方 Better Auth CLI 前要求用户表为空。CLI 使用交互模式读取密码；脚本不会将真实密码放在命令参数中。**不要**使用 `--password <secret>` 传真实密码；不要在生产数据库调用 `--force`、`--yes` 绕过已有用户的确认。
 
 本命令仍须在 CI 的隔离 PostgreSQL 中验证；若 CLI 版本不支持或与 Drizzle 配置冲突，停止执行并按证据修订方案。
 
@@ -30,3 +30,7 @@ CLI 若支持交互会要求输入密码。**不要**使用 `--password <secret>
 - 有后台 API 的管理员权限验证，不得仅依赖 React 条件渲染。
 - 正式环境启用前，需要评估登录限速、密码轮换、首登改密、审计、忘记密码和禁用最后一个管理员的防护。
 - 不使用真实企业账户作为公开 GitHub Actions 测试夹具。
+
+### 重复初始化防护的实测依据
+
+Better Auth 1.7.6 的 create-admin 命令在已有用户且 CI 无 TTY 时可能显示确认提示后以 0 退出，因此 **不能将其退出码当作重复创建防护**。本项目脚本在 DB 锁内做实际用户数检查；即使 CLI 自身行为变化，也不会重用已初始化数据库。
