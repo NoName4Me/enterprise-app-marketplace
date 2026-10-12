@@ -1,0 +1,51 @@
+name: T01 compatibility
+on:
+  push:
+    branches: [feat/stage1-t01-foundation]
+  pull_request:
+    branches: [master]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_USER: market, POSTGRES_PASSWORD: testonly, POSTGRES_DB: market_test}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U market -d market_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      DATABASE_URL: postgresql://market:testonly@localhost:5432/market_test
+      BETTER_AUTH_URL: http://localhost:3000
+      BETTER_AUTH_SECRET: ci-only-placeholder-keep-out-of-production-12345678
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {version: 10.17.1}
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - name: Resolve dependencies for spike
+        run: pnpm install --no-frozen-lockfile
+      - name: Generate and apply candidate migration
+        run: |
+          pnpm db:generate
+          pnpm db:migrate
+      - name: Validate source
+        run: |
+          pnpm typecheck
+          pnpm lint
+          pnpm test
+          pnpm build
+      - name: Upload lockfile and migration for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: t01-candidate-artifacts
+          path: |
+            pnpm-lock.yaml
+            drizzle/
+          if-no-files-found: warn
