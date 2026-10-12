@@ -44,6 +44,18 @@ export function UserManagement({ users }: { users: ListedUser[] }) {
     finally { setWorking(false); }
   }
 
+  async function setBanned(userId: string, banned: boolean) {
+    setWorking(true); setMessage("");
+    try {
+      const result = banned
+        ? await authClient.admin.banUser({ userId, banReason: "由平台管理员停用" })
+        : await authClient.admin.unbanUser({ userId });
+      if (result.error) throw new Error("停用状态更新失败");
+      router.refresh();
+    } catch { setMessage("停用状态更新失败"); }
+    finally { setWorking(false); }
+  }
+
   return <div className="card">
     <h2>创建员工</h2>
     <form onSubmit={create}>
@@ -63,6 +75,12 @@ export function UserManagement({ users }: { users: ListedUser[] }) {
           onClick={() => setCreatePermission(u.id, !u.canCreateApp)}>
           {u.canCreateApp ? "撤销创建权" : "授予创建权"}
         </button>
+        {" "}
+        {!(u.role ?? "user").split(",").includes("admin") && (
+          <button type="button" disabled={working} onClick={() => setBanned(u.id, !u.banned)}>
+            {u.banned ? "恢复账号" : "停用账号"}
+          </button>
+        )}
       </li>)}
     </ul>
   </div>;

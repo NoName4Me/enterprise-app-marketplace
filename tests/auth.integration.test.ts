@@ -5,72 +5,95 @@ import { db } from "../src/db/client";
 import { user, session } from "../src/db/schema";
 import { getActiveUser } from "../src/lib/active-user";
 import { mayCreateApp } from "../src/lib/access";
+import { PATCH as setCreatorPermission } from "../src/app/api/admin/creator-permission/route";
 
 const base = "http://localhost:3000";
-const email = "t01-worker-" + process.env.GITHUB_RUN_ID + "@example.test";
+const email = "t01-worker-" + (process.env.GITHUB_RUN_ID ?? "local") + "@example.test";
 const password = "Fixture-only-strong-password-1234!";
-const cookieHeaders = { "content-type": "application/json", origin: base };
+const adminEmail = "t01-admin@example.test";
+const adminPassword = "CI-only-test-password-not-a-real-secret-123!";
+const commonHeaders = { "content-type": "application/json", origin: base };
 
-function cookieOf(response: Response) {
-  const header = response.headers.get("set-cookie");
-  if (!header) throw new Error("Expected Better Auth session cookie");
-  return header.split(";")[0];
+function cookieOf(response: Response): string {
+  const setCookie = response.headers.get("set-cookie");
+  if (!setCookie) throw new Error("Session cookie missing");
+  const token = setCookie.split(",").find(part => part.includes("session_token")) ?? setCookie;
+  return token.trim().split(";")[0];
 }
-
-async function request(method: string, path: string, body?: unknown, cookie?: string) {
+async function call(method: string, path: string, body?: unknown, cookie?: string) {
   return auth.handler(new Request(base + path, {
     method,
-    headers: { ...cookieHeaders, ...(cookie ? { cookie } : {}) },
+    headers: { ...commonHeaders, ...(cookie ? { cookie } : {}) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  }));
+}
+async function grant(userId: string, canCreateApp: boolean, cookie?: string) {
+  return setCreatorPermission(new Request(base + "/api/admin/creator-permission", {
+    method: "PATCH",
+    headers: { ...commonHeaders, ...(cookie ? { cookie } : {}) },
+    body: JSON.stringify({ userId, canCreateApp }),
   }));
 }
 
 afterAll(async () => {
-  const [record] = await db.select({ id: user.id }).from(user).where(eq(user.email, email));
-  if (record) await db.delete(user).where(eq(user.id, record.id));
+  const [found] = await db.select({ id: user.id }).from(user).where(eq(user.email, email));
+  if (found) await db.delete(user).where(eq(user.id, found.id));
 });
 
-describe("real Better Auth session lifecycle", () => {
-  it("rejects anonymous registration", async () => {
-    const response = await request("POST", "/api/auth/sign-up/email",
-      { name: "Untrusted", email: "public-blocked@example.test", password });
-    expect(response.status).toBeGreaterThanOrEqual(400);
-    expect(await db.select({ id: user.id }).from(user).where(eq(user.email, "public-blocked@example.test"))).toHaveLength(0);
+describe("Better Auth admin, session and business rights integration", () => {
+  it("rejects unauthenticated public sign-up and unauthorized permission changes", async () => {
+    const rejected = await call("POST", "/api/auth/sign-up/email",
+      { name: "Untrusted", email: "blocked-public@example.test", password });
+    expect(rejected.status).toBeGreaterThanOrEqual(400);
+    expect(await db.select({ id: user.id }).from(user)
+      .where(eq(user.email, "blocked-public@example.test"))).toHaveLength(0);
+    expect((await grant("unknown", true)).status).toBe(401);
   });
 
-  it("provisions staff through the admin server API, signs in, observes live role changes and signs out", async () => {
-    const administrator = await request("POST", "/api/auth/sign-in/email", {
-      email: "t01-admin@example.test",
-      password: "CI-only-test-password-not-a-real-secret-123!",
-    });
-    expect(administrator.status).toBe(200);
-    const adminCookie = cookieOf(administrator);
-    const created = await auth.api.createUser({ headers: new Headers({ cookie: adminCookie }), body: {
+  it("creates an employee as admin and rejects the employee's direct privilege escalation", async () => {
+    const adminLogin = await call("POST", "/api/auth/sign-in/email",
+      { email: adminEmail, password: adminPassword });
+    expect(adminLogin.status).toBe(200);
+    const adminCookie = cookieOf(adminLogin);
+    const adminHeaders = new Headers({ cookie: adminCookie });
+
+    const created = await auth.api.createUser({ headers: adminHeaders, body: {
       name: "T01 Worker", email, password, role: "user",
     } });
     expect(created.user.email).toBe(email);
-    const signedIn = await request("POST", "/api/auth/sign-in/email", { email, password });
-    expect(signedIn.status).toBe(200);
-    const cookie = cookieOf(signedIn);
-    const headers = new Headers({ cookie });
 
-    const current = await getActiveUser(headers);
-    expect(current?.email).toBe(email);
-    expect(mayCreateApp(current!)).toBe(false);
+    const employeeLogin = await call("POST", "/api/auth/sign-in/email", { email, password });
+    expect(employeeLogin.status).toBe(200);
+    const employeeCookie = cookieOf(employeeLogin);
+    const employeeHeaders = new Headers({ cookie: employeeCookie });
 
-    await db.update(user).set({ canCreateApp: true }).where(eq(user.id, created.user.id));
-    expect(mayCreateApp((await getActiveUser(headers))!)).toBe(true);
+    expect((await getActiveUser(employeeHeaders))?.email).toBe(email);
+    expect((await grant(created.user.id, true, employeeCookie)).status).toBe(403);
+    expect(mayCreateApp((await getActiveUser(employeeHeaders))!)).toBe(false);
 
-    await db.update(user).set({ banned: true }).where(eq(user.id, created.user.id));
-    expect(await getActiveUser(headers)).toBeNull();
+    expect((await grant(created.user.id, true, adminCookie)).status).toBe(200);
+    expect(mayCreateApp((await getActiveUser(employeeHeaders))!)).toBe(true);
+    expect((await grant(created.user.id, false, adminCookie)).status).toBe(200);
+    expect(mayCreateApp((await getActiveUser(employeeHeaders))!)).toBe(false);
 
-    await db.update(user).set({ banned: false }).where(eq(user.id, created.user.id));
-    const signedOut = await request("POST", "/api/auth/sign-out", undefined, cookie);
+    await auth.api.banUser({
+      headers: adminHeaders,
+      body: { userId: created.user.id, banReason: "CI auth boundary test" },
+    });
+    expect(await getActiveUser(employeeHeaders)).toBeNull();
+    const bannedLogin = await call("POST", "/api/auth/sign-in/email", { email, password });
+    expect(bannedLogin.status).toBeGreaterThanOrEqual(400);
+
+    await auth.api.unbanUser({ headers: adminHeaders, body: { userId: created.user.id } });
+    const resumed = await call("POST", "/api/auth/sign-in/email", { email, password });
+    expect(resumed.status).toBe(200);
+    const newCookie = cookieOf(resumed);
+
+    const signedOut = await call("POST", "/api/auth/sign-out", undefined, newCookie);
     expect(signedOut.status).toBe(200);
-    expect(await auth.api.getSession({ headers })).toBeNull();
-
-    const rows = await db.select({ token: session.token }).from(session)
+    expect(await auth.api.getSession({ headers: new Headers({ cookie: newCookie }) })).toBeNull();
+    const remaining = await db.select({ token: session.token }).from(session)
       .where(eq(session.userId, created.user.id));
-    expect(rows).toHaveLength(0);
+    expect(remaining).toHaveLength(0);
   });
 });
