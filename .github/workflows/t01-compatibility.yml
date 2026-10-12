@@ -34,6 +34,8 @@ jobs:
         run: |
           pnpm db:generate
           pnpm db:migrate
+      - name: Validate database auth boundaries
+        run: pnpm test:db
       - name: Validate source
         run: |
           pnpm typecheck
