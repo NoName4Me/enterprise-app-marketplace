@@ -16,7 +16,7 @@
 
 ## T01 合并闸门
 - [x] 冻结锁文件 CI 成功且日志可复核；
-- [ ] 使用 Better Auth 官方 CLI 验证认证 schema；
+- [ ] 校验认证 schema：`auth@1.7.6 check schema` 对当前 Drizzle adapter 报 `Schema validation is not available`（不等于 schema 正确）。已改为生成官方参考 schema 并与现有结构对比；真实认证写入/会话集成测试仍需扩充。
 - [x] 已补齐 pnpm-lock.yaml 与 drizzle/ 迁移文件，冻结锁文件 CI 验证成功；
 - [ ] 匿名注册拒绝的 DB 集成测试已通过；登录/退出、真实会话及停用账号拒绝仍待覆盖；
 - 重跑 typecheck、lint、test、build 和数据库迁移；
@@ -32,3 +32,5 @@
 - 以上通过项均不代表登录成功、账号停用等端到端验收完成。
 
 - [冻结锁文件及数据库集成测试 CI 成功](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38279380263)：包含迁移无漂移、禁止匿名注册数据库集成测试、typecheck、lint、unit、build。
+
+- [官方 schema check 的失败记录](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38279575871)：CLI 因当前适配器无法提供检查而退出 2；不能当作字段校验失败，也不能当作验收通过。

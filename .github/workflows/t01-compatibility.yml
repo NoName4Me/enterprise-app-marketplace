@@ -34,8 +34,14 @@ jobs:
         run: |
           pnpm db:generate
           pnpm db:migrate
-      - name: Validate Better Auth schema against adapter contract
-        run: pnpm dlx auth@1.7.6 check schema --config ./src/lib/auth.ts
+      - name: Generate Better Auth reference schema for review
+        run: pnpm dlx auth@1.7.6 generate --adapter drizzle --dialect postgresql --config ./src/lib/auth.ts --output ./auth-schema.generated.ts --yes
+      - name: Upload auth schema reference
+        uses: actions/upload-artifact@v4
+        with:
+          name: better-auth-reference-schema
+          path: auth-schema.generated.ts
+          if-no-files-found: error
       - name: Ensure lockfile and generated migrations have no drift
         run: git diff --exit-code -- pnpm-lock.yaml drizzle/
       - name: Validate database auth boundaries
