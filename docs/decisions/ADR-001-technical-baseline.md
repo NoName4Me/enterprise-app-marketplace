@@ -1,6 +1,6 @@
 # ADR-001：MVP-1 技术基线与演进策略
 
-- 状态：**Accepted for MVP-1 implementation**（待编码 Spike 验证兼容性）
+- 状态：**Accepted for MVP-1 implementation**（认证基础兼容性已由 CI 验证；后续业务尚待实现）
 - 日期：2026-10-13
 - 决策范围：首个纵向闭环，不等于未来产品永久技术承诺
 - 业务前提：参考 [已确认产品决策](README.md)
@@ -13,7 +13,7 @@
 
 1. **模块化单体、同源全栈**：Next.js App Router + React + TypeScript，使用 Node runtime 处理服务端页面与 API；仅在形成真实系统边界后才拆服务。
 2. **数据库**：PostgreSQL。使用 Drizzle ORM 和受控迁移，利用关系约束、事务、局部唯一索引保护审批不变量。
-3. **身份认证**：Better Auth 邮箱密码登录与服务端 Session；禁用自助注册。管理员由独立 CLI 引导初始化，账号创建受管理员权限控制；正式使用前验证库对停用账号、重置与会话撤销的支持。
+3. **身份认证**：Better Auth 邮箱密码登录、官方 Admin 插件和服务端 Session；禁用自助注册。采用数据库排他锁封装官方 CLI 引导首个管理员，后续员工由插件管理；`canCreateApp` 是独立的业务权限，不由管理员角色隐式授予。账号封禁、恢复和旧会话失效已由 DB 集成测试验证，首登改密及最后管理员保护仍为生产上线阻断项。
 4. **应用审批领域模型**：逻辑 App + immutable review snapshots + approved published pointer。UI/API 公开查询只走已发布指针。新应用先搭结构，后续更新复审沿用结构。
 5. **质量工具**：TypeScript strict、ESLint、Vitest（单元 + PostgreSQL 集成）、Playwright E2E。CI 规则以实际可执行证据为准。
 6. **部署**：Node.js/Docker 与外部 PostgreSQL 作为可移植目标；Sites 仅待后续适配 Spike，并非已经可用的后端托管方案。
@@ -54,4 +54,10 @@
 - https://better-auth.com/docs/adapters/drizzle
 - https://orm.drizzle.team/docs/indexes-constraints
 
-此 ADR 的 Accepted 意味着**同意作为工程试行基线**，不意味着上述组合已经通过安装/构建/安全测试。
+该方案的安装、迁移、类型检查、代码检查、单元及认证数据库集成测试已由 GitHub Actions 验证。其他安全与业务能力仍需独立评估，不等于生产可用。
+
+## 2026-10-13 认证实现复盘
+
+早期设想使用自定义 `isAdmin` / `disabled` 字段，实际改为 Better Auth Admin 插件的 `role` / `banned`；原因是使用经过版本化验证的账号创建、禁用/恢复和 Session 撤销机制优于自研这些安全敏感逻辑。业务创建权继续使用 `canCreateApp`，在受保护请求中实时读取 PostgreSQL。
+
+Better Auth 官方 CLI 的重复管理员创建确认在非交互环境可能以退出码 0 返回，因此外层脚本必须先锁住数据库、检查用户表为空，并在创建后验证唯一管理员账号，不能仅依赖 CLI 返回码。

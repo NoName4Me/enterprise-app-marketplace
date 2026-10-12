@@ -1,7 +1,7 @@
-name: T01 compatibility and auth verification
+name: CI - auth and foundation
 on:
   push:
-    branches: [feat/stage1-t01-foundation]
+    branches: [master, feat/stage1-t01-foundation]
   pull_request:
     branches: [master]
 
