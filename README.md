@@ -2,7 +2,7 @@
 
 一个面向企业员工的内部应用市场：员工可以发现、使用、评价应用；获得创建权限的员工可以登记并提交应用，管理员审核后上架。产品参考应用商店的发现与互动机制，并支持通过自然语言查找适合的应用。
 
-> 当前状态：**阶段 0（需求与技术设计）文档已完成，阶段 1 尚未开始**。技术选型是待 T01 安装/运行验证的试行基线；没有声称代码、部署或自动化测试已经通过。
+> 当前状态：**T01 认证与工程骨架已实现并完成 CI 验证**；尚未实现应用登记、发布审核与市场搜索；未部署生产环境。
 
 ## 产品范围
 
@@ -43,3 +43,25 @@
 ## 许可
 
 尚未选择开源许可证。仓库公开可读不等同于授予第三方复用、修改或分发代码的许可证。
+
+## 本地快速启动（T01）
+
+需要 Node.js 22、pnpm 10.17.1、Docker / Docker Compose。
+
+```sh
+pnpm install --frozen-lockfile
+cp .env.example .env
+# 修改 .env 中的 BETTER_AUTH_SECRET 为本地随机生成的高强度密钥
+docker compose up -d
+pnpm db:migrate
+node scripts/bootstrap-admin.mjs --email admin@example.com --name Administrator
+pnpm dev
+```
+
+浏览器打开 `http://localhost:3000/login`，登录后进入 `/apps`；管理员可在 `/admin/users` 开通员工、停用员工及维护应用创建权限。应用市场业务尚未实现。
+
+**注意**：管理员初始化只可在空用户表上执行，不要使用生产密码命令行参数；首次执行时按 CLI 的交互提示输入密码。密码与 `DATABASE_URL` 等机密不能提交 GitHub。若使用其他邮箱，请替换命令中的示例地址。
+
+自动化数据库集成测试会操作用户表，必须使用独立的测试数据库，不能直接对已有真实数据的开发/生产数据库执行；CI 使用独立 PostgreSQL fixture。正式上线前还需首登改密、账号恢复、最后管理员保护和浏览器 E2E 安全验收。
+
+详细信息：[认证与管理员初始化](docs/engineering/T01_AUTH_SETUP.md)、[T01 验证记录](docs/engineering/T01_STATUS.md)。
