@@ -34,6 +34,8 @@ jobs:
         run: |
           pnpm db:generate
           pnpm db:migrate
+      - name: Validate Better Auth schema against adapter contract
+        run: pnpm dlx auth@1.7.6 check schema --config ./src/lib/auth.ts
       - name: Ensure lockfile and generated migrations have no drift
         run: git diff --exit-code -- pnpm-lock.yaml drizzle/
       - name: Validate database auth boundaries
