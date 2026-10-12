@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { user } from "@/db/schema";
@@ -10,7 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: Request) {
-  const caller = await getActiveUser(await headers());
+  const caller = await getActiveUser(request.headers);
   if (!caller) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!mayReviewApp(caller)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 

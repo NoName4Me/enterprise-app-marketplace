@@ -36,6 +36,9 @@ jobs:
         run: |
           pnpm db:generate
           pnpm db:migrate
+      - name: Bootstrap initial administrator (isolated fixture database)
+        run: |
+          timeout 45s pnpm dlx auth@1.7.6 create-admin --config ./src/lib/auth.ts --email t01-admin@example.test --name "CI Test Admin" --role admin --password 'CI-only-test-password-not-a-real-secret-123!'
       - name: Generate auth schema reference
         run: pnpm dlx auth@1.7.6 generate --adapter drizzle --dialect postgresql --config ./src/lib/auth.ts --output ./auth-schema.generated.ts --yes
       - name: Upload generated auth reference

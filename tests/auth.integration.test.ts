@@ -39,7 +39,13 @@ describe("real Better Auth session lifecycle", () => {
   });
 
   it("provisions staff through the admin server API, signs in, observes live role changes and signs out", async () => {
-    const created = await auth.api.createUser({ body: {
+    const administrator = await request("POST", "/api/auth/sign-in/email", {
+      email: "t01-admin@example.test",
+      password: "CI-only-test-password-not-a-real-secret-123!",
+    });
+    expect(administrator.status).toBe(200);
+    const adminCookie = cookieOf(administrator);
+    const created = await auth.api.createUser({ headers: new Headers({ cookie: adminCookie }), body: {
       name: "T01 Worker", email, password, role: "user",
     } });
     expect(created.user.email).toBe(email);
