@@ -7,13 +7,13 @@ export default defineConfig({
   workers: 1,
   timeout: 90000,
   reporter: process.env.CI ? "github" : "list",
-  use: { baseURL: "http://127.0.0.1:3000", trace: "retain-on-failure" },
+  use: { baseURL: "http://localhost:3000", trace: "retain-on-failure" },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
   ],
   webServer: {
     command: "pnpm start -p 3000",
-    url: "http://127.0.0.1:3000/login",
+    url: "http://localhost:3000/login",
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
   },
