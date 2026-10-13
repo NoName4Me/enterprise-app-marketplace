@@ -43,4 +43,25 @@ describe.sequential("last active administrator invariant at PostgreSQL boundary"
     await expect(db.update(user).set({ banned: true })
       .where(eq(user.id, base.id))).rejects.toThrow();
   });
+
+  it("serializes simultaneous attempts to remove two administrators", async () => {
+    const [base] = await db.select({ id: user.id }).from(user)
+      .where(eq(user.email, mainAdminEmail)).limit(1);
+    await db.update(user).set({ banned: false, role: "admin" })
+      .where(eq(user.id, extraId));
+    try {
+      const results = await Promise.allSettled([
+        db.update(user).set({ banned: true }).where(eq(user.id, base.id)),
+        db.update(user).set({ banned: true }).where(eq(user.id, extraId)),
+      ]);
+      expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+      expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+      const active = await db.select({ id: user.id, banned: user.banned, role: user.role })
+        .from(user);
+      expect(active.filter(u => u.banned !== true && u.role?.split(",").includes("admin"))).toHaveLength(1);
+    } finally {
+      await db.update(user).set({ banned: false }).where(eq(user.id, base.id));
+      await db.update(user).set({ banned: false }).where(eq(user.id, extraId));
+    }
+  });
 });
