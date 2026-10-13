@@ -11,8 +11,8 @@ export default function Login(){
   e.preventDefault();setError("");setBusy(true);
   try{
    const result=await authClient.signIn.email({email,password});
-   if(result.error)setError("登录失败，请检查账号或密码");
-   else{router.replace("/apps");router.refresh();}
+   if(result.error)setError(result.error.status===429?"登录尝试过于频繁，请稍后重试":"登录失败，请检查账号或密码");
+   else{const status=await fetch("/api/account/status");const account=await status.json();router.replace(account.mustChangePassword?"/account/security":"/apps");router.refresh();}
   }catch{setError("登录服务暂不可用");}
   finally{setBusy(false);}
  }
@@ -26,5 +26,5 @@ export default function Login(){
    <label>密码<input type="password" required autoComplete="current-password" placeholder="输入密码" value={password} onChange={e=>setPassword(e.target.value)}/></label>
    {error&&<p className="error" role="alert">{error}</p>}
    <button type="submit" disabled={busy}>{busy?"登录中…":"登录"}</button>
-  </form><p className="login-note">账号由管理员开通，公开注册关闭。</p></div></section></main>;
+  </form><p className="login-note">账号由管理员开通，公开注册关闭。<br/>忘记密码？请联系管理员核实身份并获取限时重置链接。</p></div></section></main>;
 }

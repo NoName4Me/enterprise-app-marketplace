@@ -4,7 +4,7 @@ const suffix = process.env.GITHUB_RUN_ID ?? String(Date.now());
 const creatorEmail = `e2e-creator-${suffix}@example.test`;
 const readerEmail = `e2e-reader-${suffix}@example.test`;
 const adminEmail = "t01-admin@example.test";
-const adminPassword = "CI-only-test-password-not-a-real-secret-123!";
+const adminPassword = "CI-only-changed-admin-password-not-a-real-secret-456!";
 const employeePassword = "CI-browser-test-only-password-12345!";
 const appName = `E2E报表中心${suffix}`;
 const updatedName = `E2E新版报表中心${suffix}`;
@@ -14,6 +14,13 @@ async function login(page: Page, email: string, password: string) {
   await page.getByLabel("邮箱").fill(email);
   await page.getByLabel("密码").fill(password);
   await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page).toHaveURL(/\/(apps|account\/security)(?:\?|$)/);
+  if (page.url().includes("/account/security")) {
+    await page.getByLabel("当前密码", { exact: true }).fill(password);
+    await page.getByLabel("新密码", { exact: true }).fill(password + "-personal");
+    await page.getByLabel("确认新密码", { exact: true }).fill(password + "-personal");
+    await page.getByRole("button", { name: "保存新密码" }).click();
+  }
   await expect(page).toHaveURL(/\/apps(?:\?|$)/);
 }
 

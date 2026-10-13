@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { SiteNav } from "@/app/components/site-nav";
 import { getPublished } from "@/domain/app-service";
 import { AppError } from "@/domain/app-errors";
-import { getActiveUser } from "@/lib/active-user";
+import { getPageUser } from "@/lib/page-user";
 import { categoryNames } from "@/lib/marketplace-labels";
 import { getCommunity } from "@/domain/community-service";
 import { CommunityPanel } from "./community-panel";
@@ -13,7 +13,7 @@ import { AppIcon } from "@/app/components/app-icon";
 
 export const dynamic = "force-dynamic";
 export default async function AppDetail({ params }: { params: Promise<{ id: string }> }) {
-  const user = await getActiveUser(await headers());
+  const user = await getPageUser(await headers());
   if (!user) redirect("/login");
   let app: Awaited<ReturnType<typeof getPublished>>;
   try { app = await getPublished({ id: user.id }, (await params).id); }

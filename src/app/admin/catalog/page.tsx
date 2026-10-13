@@ -3,14 +3,14 @@ import { redirect } from "next/navigation";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { applications, appRevisions, catalogEvents, user as users } from "@/db/schema";
-import { getActiveUser } from "@/lib/active-user";
+import { getPageUser } from "@/lib/page-user";
 import { authorizeActor } from "@/domain/actor";
 import { mayReviewApp } from "@/lib/access";
 import { SiteNav } from "@/app/components/site-nav";
 import { CatalogManagement } from "./catalog-management";
 export const dynamic = "force-dynamic";
 export default async function AdminCatalog() {
-  const user = await getActiveUser(await headers());
+  const user = await getPageUser(await headers());
   if (!user) redirect("/login");
   if (!mayReviewApp(user)) redirect("/apps");
   await authorizeActor({ id: user.id }, "review");

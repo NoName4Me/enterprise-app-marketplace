@@ -3,13 +3,13 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { SiteNav } from "@/app/components/site-nav";
 import { listOwnedApplications } from "@/domain/app-service";
-import { getActiveUser } from "@/lib/active-user";
+import { getPageUser } from "@/lib/page-user";
 import { mayCreateApp } from "@/lib/access";
 import { statusName } from "@/lib/marketplace-labels";
 
 export const dynamic = "force-dynamic";
 export default async function MyApps() {
-  const current = await getActiveUser(await headers());
+  const current = await getPageUser(await headers());
   if (!current) redirect("/login");
   const apps = await listOwnedApplications({ id: current.id });
   return <SiteNav user={current} title="我的应用">

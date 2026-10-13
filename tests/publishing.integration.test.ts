@@ -23,7 +23,7 @@ function request(method: string, route: string, cookie?: string, body?: unknown)
   return new Request(base + route, {
     method,
     headers: {
-      origin: base, "content-type": "application/json",
+      "x-test-client-ip": "10.23.0.3", origin: base, "content-type": "application/json",
       ...(cookie ? { cookie } : {}),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -53,7 +53,9 @@ async function createFixture(role: "user" | "admin", label: string) {
   });
   userIds.push(created.user.id);
   ids[label] = created.user.id;
-  cookies[label] = await login(email, password);
+  const firstCookie = await login(email, password);
+  const changed = await auth.handler(request("POST", "/api/auth/change-password", firstCookie, { currentPassword: password, newPassword: password + "-personal" }));
+  expect(changed.status).toBe(200); cookies[label] = cookieFrom(changed);
   return created.user.id;
 }
 async function createAs(label: string, content: Record<string, unknown>) {
@@ -69,7 +71,7 @@ const draftContent = {
 };
 
 beforeAll(async () => {
-  cookies.admin = await login("t01-admin@example.test", "CI-only-test-password-not-a-real-secret-123!");
+  cookies.admin = await login("t01-admin@example.test", "CI-only-changed-admin-password-not-a-real-secret-456!");
   await createFixture("user", "alice");
   await createFixture("user", "bob");
   await createFixture("user", "carol");

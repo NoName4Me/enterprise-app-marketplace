@@ -3,12 +3,12 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { SiteNav } from "@/app/components/site-nav";
 import { listPendingReviews } from "@/domain/app-service";
-import { getActiveUser } from "@/lib/active-user";
+import { getPageUser } from "@/lib/page-user";
 import { mayReviewApp } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 export default async function ReviewQueue() {
-  const user = await getActiveUser(await headers());
+  const user = await getPageUser(await headers());
   if (!user) redirect("/login");
   if (!mayReviewApp(user)) redirect("/apps");
   const pending = await listPendingReviews({ id: user.id });

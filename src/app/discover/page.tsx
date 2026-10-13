@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { getActiveUser } from "@/lib/active-user";
+import { getPageUser } from "@/lib/page-user";
 import { listPublished } from "@/domain/app-service";
 import { matchScenarios, scenarios } from "@/domain/discovery";
 import { SiteNav } from "@/app/components/site-nav";
@@ -9,7 +9,7 @@ import { AppGrid } from "@/app/components/app-grid";
 import { UiIcon } from "@/app/components/ui-icon";
 export const dynamic = "force-dynamic";
 export default async function Discover({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const user = await getActiveUser(await headers());
+  const user = await getPageUser(await headers());
   if (!user) redirect("/login");
   const q = (await searchParams).q?.trim().slice(0, 120) ?? "";
   // Scan published pages only; do not mix private revisions into matching.

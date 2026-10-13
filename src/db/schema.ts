@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { pgTable, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
+import { bigint, jsonb, pgTable, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
 
 // Better Auth 1.7.6 core + admin plugin fields.
 // Compare with the output of the pinned official auth CLI in CI.
@@ -12,6 +12,7 @@ export const user = pgTable("user", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
   canCreateApp: boolean("can_create_app").default(false).notNull(),
+  mustChangePassword: boolean("must_change_password").default(true).notNull(),
   role: text("role").default("user"),
   banned: boolean("banned").default(false),
   banReason: text("ban_reason"),
@@ -161,3 +162,21 @@ export const catalogEvents = pgTable("catalog_events", {
   reason: text("reason"),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
 }, t => [index("catalog_events_app_idx").on(t.appId)]);
+
+// Account audit intentionally excludes credentials, tokens, email and request bodies.
+export const securityEvents = pgTable("security_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  actorUserId: text("actor_user_id"),
+  targetUserId: text("target_user_id"),
+  action: text("action").notNull(),
+  before: jsonb("before_state"),
+  after: jsonb("after_state"),
+  reason: text("reason"),
+  occurredAt: timestamp("occurred_at").defaultNow().notNull(),
+}, table => [index("security_events_time_idx").on(table.occurredAt)]);
+
+export const authRateLimits = pgTable("auth_rate_limits", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+}, table => [index("auth_rate_limits_time_idx").on(table.lastRequest)]);

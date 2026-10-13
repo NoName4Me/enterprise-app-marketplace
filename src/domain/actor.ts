@@ -14,8 +14,9 @@ export async function authorizeActor(
   if (!actor) throw new AppError(401, "unauthorized");
   const [record] = await database.select({
     id: user.id, role: user.role, banned: user.banned,
-    canCreateApp: user.canCreateApp,
+    canCreateApp: user.canCreateApp, mustChangePassword: user.mustChangePassword,
   }).from(user).where(and(eq(user.id, actor.id), eq(user.banned, false))).limit(1);
+  if (record?.mustChangePassword) throw new AppError(403, "password_change_required");
   if (!record) throw new AppError(401, "unauthorized");
   if (permission === "create" && !mayCreateApp(record)) throw new AppError(403, "forbidden");
   if (permission === "review" && !mayReviewApp(record)) throw new AppError(403, "forbidden");

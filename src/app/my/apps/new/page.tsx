@@ -1,13 +1,13 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { SiteNav } from "@/app/components/site-nav";
-import { getActiveUser } from "@/lib/active-user";
+import { getPageUser } from "@/lib/page-user";
 import { mayCreateApp } from "@/lib/access";
 import { ApplicationForm } from "../application-form";
 
 export const dynamic = "force-dynamic";
 export default async function NewApplication() {
-  const current = await getActiveUser(await headers());
+  const current = await getPageUser(await headers());
   if (!current) redirect("/login");
   if (!mayCreateApp(current)) redirect("/my/apps");
   return <SiteNav user={current} title="登记新应用">

@@ -23,6 +23,7 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       DATABASE_URL: postgresql://market:testonly@localhost:5432/market_test
       BETTER_AUTH_URL: http://localhost:3000
+      AUTH_TRUSTED_IP_HEADER: x-test-client-ip
       BETTER_AUTH_SECRET: ci-only-placeholder-keep-out-of-production-12345678
     steps:
       - uses: actions/checkout@v4
@@ -45,6 +46,8 @@ jobs:
             echo "ERROR: bootstrap allowed duplicate admin"
             exit 1
           fi
+      - name: Complete fixture administrator first password change
+        run: node scripts/run-demo.mjs scripts/prepare-test-admin.ts
       - name: Generate auth schema reference
         run: pnpm dlx auth@1.7.6 generate --adapter drizzle --dialect postgresql --config ./src/lib/auth.ts --output ./auth-schema.generated.ts --yes
       - name: Upload generated auth reference

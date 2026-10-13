@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { SiteNav } from "@/app/components/site-nav";
 import { getOwnedApplication } from "@/domain/app-service";
 import { AppError } from "@/domain/app-errors";
-import { getActiveUser } from "@/lib/active-user";
+import { getPageUser } from "@/lib/page-user";
 import { mayCreateApp } from "@/lib/access";
 import { categoryNames, statusName } from "@/lib/marketplace-labels";
 import { ApplicationForm } from "../application-form";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function ManagedApplication({
   params,
 }: { params: Promise<{ id: string }> }) {
-  const current = await getActiveUser(await headers());
+  const current = await getPageUser(await headers());
   if (!current) redirect("/login");
   const id = (await params).id;
   let data: Awaited<ReturnType<typeof getOwnedApplication>>;

@@ -17,7 +17,7 @@ node scripts/bootstrap-admin.mjs --email admin@example.com --name Admin
 
 ## 创建员工
 
-管理员登录后进入 `/admin/users`，调用 Better Auth Admin 插件创建员工账号。应通过安全渠道提供初始凭据，生产部署需在后续补充一次性重置或强制更改初始密码功能；本轮仅用于受控开发和测试。
+管理员登录后进入 `/admin/users`，调用 Better Auth Admin 插件创建员工账号。应通过安全渠道提供初始凭据，新账号首次登录强制改密，管理员可生成 15 分钟内有效的一次性重置链接，见 [账号安全交付](ACCOUNT_SECURITY.md)。
 
 管理员可为指定员工授予/撤销 `canCreateApp`。这项业务权限由应用服务端在**每次受保护请求**时重新读取数据库，不信任 session 中的旧角色字段。
 
@@ -28,7 +28,7 @@ node scripts/bootstrap-admin.mjs --email admin@example.com --name Admin
 - 外部访问必须 HTTPS；`.env`、数据库密码及 Better Auth secret 不得提交仓库。
 - `/admin/users` 的数据展示及业务权限写入均须在服务端鉴权。
 - 有后台 API 的管理员权限验证，不得仅依赖 React 条件渲染。
-- 正式环境启用前，需要评估登录限速、密码轮换、首登改密、审计、忘记密码和禁用最后一个管理员的防护。
+- 首登改密、受控重置、账号审计、限速及最后管理员保护已实现；正式环境启用前落实 HTTPS、可信代理及数据库权限隔离。
 - 不使用真实企业账户作为公开 GitHub Actions 测试夹具。
 
 ### 重复初始化防护的实测依据

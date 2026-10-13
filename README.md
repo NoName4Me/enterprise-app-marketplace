@@ -103,3 +103,5 @@ pnpm build
 ## 容器交付（T05）
 
 通过 Docker 多阶段构建得到非 root Node.js standalone 镜像。真实 CI 已执行镜像构建、连接 PostgreSQL 的容器启动、健康检查和匿名接口 401 验证。操作步骤、数据库迁移及回退要求见 [T05 容器交付记录](docs/engineering/T05_CONTAINER.md)。此检查不代表已部署到生产环境。
+
+账号安全：新账号首登改密、管理员限时一次性密码重置、敏感操作审计和数据库限速已实现；入口 `/account/security`、`/admin/users`，验证与生产配置边界见 [账号安全交付](docs/engineering/ACCOUNT_SECURITY.md)。

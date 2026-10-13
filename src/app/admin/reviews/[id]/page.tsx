@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { SiteNav } from "@/app/components/site-nav";
 import { getPendingReview } from "@/domain/app-service";
 import { AppError } from "@/domain/app-errors";
-import { getActiveUser } from "@/lib/active-user";
+import { getPageUser } from "@/lib/page-user";
 import { mayReviewApp } from "@/lib/access";
 import { categoryNames } from "@/lib/marketplace-labels";
 import { ReviewControls } from "../review-controls";
@@ -30,7 +30,7 @@ function RevisionDetails({ title, value }: {
 export default async function ReviewDetails({
   params,
 }: { params: Promise<{ id: string }> }) {
-  const user = await getActiveUser(await headers());
+  const user = await getPageUser(await headers());
   if (!user) redirect("/login");
   if (!mayReviewApp(user)) redirect("/apps");
   let revision: Awaited<ReturnType<typeof getPendingReview>>;

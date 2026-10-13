@@ -11,8 +11,8 @@ const base = "http://localhost:3000";
 const email = "t01-worker-" + (process.env.GITHUB_RUN_ID ?? "local") + "@example.test";
 const password = "Fixture-only-strong-password-1234!";
 const adminEmail = "t01-admin@example.test";
-const adminPassword = "CI-only-test-password-not-a-real-secret-123!";
-const commonHeaders = { "content-type": "application/json", origin: base };
+const adminPassword = "CI-only-changed-admin-password-not-a-real-secret-456!";
+const commonHeaders = { "x-test-client-ip": "10.23.0.2", "content-type": "application/json", origin: base };
 
 function cookieOf(response: Response): string {
   const setCookie = response.headers.get("set-cookie");
@@ -64,7 +64,9 @@ describe("Better Auth admin, session and business rights integration", () => {
 
     const employeeLogin = await call("POST", "/api/auth/sign-in/email", { email, password });
     expect(employeeLogin.status).toBe(200);
-    const employeeCookie = cookieOf(employeeLogin);
+    const changed = await call("POST", "/api/auth/change-password", { currentPassword: password, newPassword: password + "-personal" }, cookieOf(employeeLogin));
+    expect(changed.status).toBe(200);
+    const employeeCookie = cookieOf(changed);
     const employeeHeaders = new Headers({ cookie: employeeCookie });
 
     expect((await getActiveUser(employeeHeaders))?.email).toBe(email);
@@ -81,11 +83,11 @@ describe("Better Auth admin, session and business rights integration", () => {
       body: { userId: created.user.id, banReason: "CI auth boundary test" },
     });
     expect(await getActiveUser(employeeHeaders)).toBeNull();
-    const bannedLogin = await call("POST", "/api/auth/sign-in/email", { email, password });
+    const bannedLogin = await call("POST", "/api/auth/sign-in/email", { email, password: password + "-personal" });
     expect(bannedLogin.status).toBeGreaterThanOrEqual(400);
 
     await auth.api.unbanUser({ headers: adminHeaders, body: { userId: created.user.id } });
-    const resumed = await call("POST", "/api/auth/sign-in/email", { email, password });
+    const resumed = await call("POST", "/api/auth/sign-in/email", { email, password: password + "-personal" });
     expect(resumed.status).toBe(200);
     const newCookie = cookieOf(resumed);
 

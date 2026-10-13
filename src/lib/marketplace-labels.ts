@@ -10,6 +10,7 @@ export function statusName(status: string) {
 }
 
 const knownErrors: Record<string, string> = {
+  password_change_required: "请先修改初始密码，再使用应用市场。",
   invalid_text: "请填写内容，并控制在允许的字数范围内。",
   invalid_rating: "请选择 1–5 星评分。",
   feedback_moderated: "该评价已由管理员隐藏，暂时不能重新发布。",

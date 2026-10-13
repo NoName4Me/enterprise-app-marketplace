@@ -11,6 +11,7 @@ export function NavLinks({ canReview }: { canReview: boolean }) {
     { href: "/my/apps", label: "我的应用", icon: "layers" as const },
     { href: "/favorites", label: "我的收藏", icon: "bookmark" as const },
     { href: "/discover", label: "场景找应用", icon: "sparkles" as const },
+    { href: "/account/security", label: "账号安全", icon: "shield" as const },
     ...(canReview ? [
       { href: "/admin/reviews", label: "应用审核", icon: "shield" as const },
       { href: "/admin/users", label: "账号管理", icon: "users" as const },

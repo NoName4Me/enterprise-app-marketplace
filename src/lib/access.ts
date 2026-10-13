@@ -1,11 +1,12 @@
 export type AccountPermissions = {
   banned: boolean | null;
+  mustChangePassword?: boolean;
   role: string | null;
   canCreateApp: boolean;
 };
 
 export function mayUseMarketplace(account: AccountPermissions | null): boolean {
-  return account !== null && account.banned !== true;
+  return account !== null && account.banned !== true && account.mustChangePassword !== true;
 }
 
 export function mayCreateApp(account: AccountPermissions | null): boolean {
