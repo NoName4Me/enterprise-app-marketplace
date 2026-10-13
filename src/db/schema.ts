@@ -66,7 +66,8 @@ export const accountRelations = relations(account, ({ one }) => ({
   user: one(user, { fields: [account.userId], references: [user.id] }),
 }));
 
-import { check, integer, uuid, uniqueIndex, unique, sql } from "drizzle-orm";
+import { check, integer, uuid, uniqueIndex, unique } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // T02: catalog identity and immutable review snapshots are separate entities.
 // Application's current public revision pointer is assigned only in an approval
