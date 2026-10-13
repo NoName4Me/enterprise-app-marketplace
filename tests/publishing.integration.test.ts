@@ -45,7 +45,7 @@ async function login(email: string, secret: string) {
   expect(response.status).toBe(200);
   return cookieFrom(response);
 }
-async function createFixture(role: string, label: string) {
+async function createFixture(role: "user" | "admin", label: string) {
   const email = prefix + "-" + label + "@example.test";
   const created = await auth.api.createUser({
     headers: new Headers({ cookie: cookies.admin }),
@@ -171,6 +171,22 @@ describe.sequential("T02 published revision and approval invariants", () => {
     await db.update(user).set({ canCreateApp: false }).where(eq(user.id, ids.carol));
     expect((await submitApp(request("POST", "/api/my/apps/" + app.id + "/submit", cookies.carol), ctx(app.id))).status).toBe(403);
     await db.update(user).set({ canCreateApp: true }).where(eq(user.id, ids.carol));
+  });
+
+  it("refuses administrator self-review even when the admin has creator permission", async () => {
+    await db.update(user).set({ canCreateApp: true })
+      .where(eq(user.email, "t01-admin@example.test"));
+    try {
+      const app = await createAs("admin", draftContent);
+      expect((await submitApp(request("POST", "/api/my/apps/" + app.id + "/submit", cookies.admin),ctx(app.id))).status).toBe(200);
+      expect((await review(request("POST", "/api/admin/reviews/" + app.revisionId + "/approve", cookies.admin),
+        ctx(app.revisionId,"approve"))).status).toBe(403);
+      expect((await review(request("POST", "/api/admin/reviews/" + app.revisionId + "/approve", cookies.reviewer),
+        ctx(app.revisionId,"approve"))).status).toBe(200);
+    } finally {
+      await db.update(user).set({ canCreateApp: false })
+        .where(eq(user.email, "t01-admin@example.test"));
+    }
   });
 
   it("serializes concurrent approval and rejection, writing one terminal event", async () => {
