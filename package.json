@@ -15,7 +15,8 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "test:db": "vitest run --config vitest.db.config.ts"
+    "test:db": "vitest run --config vitest.db.config.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "next": "16.2.0",
@@ -36,6 +37,7 @@
     "eslint-config-next": "16.2.0",
     "drizzle-kit": "0.31.11",
     "dotenv": "^17.2.0",
-    "vitest": "^4.0.0"
+    "vitest": "^4.0.0",
+    "@playwright/test": "1.56.1"
   }
 }
