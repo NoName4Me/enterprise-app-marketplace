@@ -1,0 +1,64 @@
+name: CI - auth and foundation
+on:
+  push:
+    branches: [master, feat/stage1-t01-foundation]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_USER: market, POSTGRES_PASSWORD: testonly, POSTGRES_DB: market_test }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U market -d market_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      DATABASE_URL: postgresql://market:testonly@localhost:5432/market_test
+      BETTER_AUTH_URL: http://localhost:3000
+      BETTER_AUTH_SECRET: ci-only-placeholder-keep-out-of-production-12345678
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.17.1 }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Install with locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate and apply migration
+        run: |
+          pnpm db:generate
+          pnpm db:migrate
+      - name: Bootstrap initial administrator (isolated fixture database)
+        run: |
+          timeout 45s node scripts/bootstrap-admin.mjs --email t01-admin@example.test --name "CI Test Admin" --ci-test-password 'CI-only-test-password-not-a-real-secret-123!'
+      - name: Reject repeated admin bootstrap in non-interactive mode
+        run: |
+          if timeout 20s node scripts/bootstrap-admin.mjs --email t01-admin@example.test --name "CI Test Admin" --ci-test-password 'CI-only-test-password-not-a-real-secret-123!' </dev/null; then
+            echo "ERROR: bootstrap allowed duplicate admin"
+            exit 1
+          fi
+      - name: Generate auth schema reference
+        run: pnpm dlx auth@1.7.6 generate --adapter drizzle --dialect postgresql --config ./src/lib/auth.ts --output ./auth-schema.generated.ts --yes
+      - name: Upload generated auth reference
+        uses: actions/upload-artifact@v4
+        with:
+          name: better-auth-reference-schema
+          path: auth-schema.generated.ts
+      - name: Verify tracked schema and lock files
+        run: git diff --exit-code -- pnpm-lock.yaml drizzle/
+      - name: Run PostgreSQL integration tests
+        run: pnpm test:db
+      - name: Type, lint, unit and build
+        run: |
+          pnpm typecheck
+          pnpm lint
+          pnpm test
+          pnpm build
