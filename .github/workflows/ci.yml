@@ -1,7 +1,7 @@
 name: CI - Marketplace
 on:
   push:
-    branches: [master, feat/t03-t04-marketplace-ui]
+    branches: [master]
   pull_request:
     branches: [master]
 
