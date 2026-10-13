@@ -1,9 +1,9 @@
-import { and, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { applications, appRevisions, reviewEvents } from "@/db/schema";
 import { authorizeActor, type Actor } from "./actor";
 import { AppError } from "./app-errors";
-import { emptyContent, validateContent, type AppContent } from "./app-validation";
+import { validateContent, type AppContent } from "./app-validation";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function uuidOr404(id: string): string {
@@ -45,11 +45,26 @@ export async function createApplication(actor: Actor | null, fields: Record<stri
 
 export async function listOwnedApplications(actor: Actor | null) {
   const owner = await authorizeActor(actor, "active");
-  return db.select({
+  const apps = await db.select({
     id: applications.id, listingStatus: applications.listingStatus,
     publishedRevisionId: applications.publishedRevisionId,
   }).from(applications).where(eq(applications.ownerUserId, owner.id))
     .orderBy(desc(applications.createdAt)).limit(50);
+  if (apps.length === 0) return [];
+  const revisions = await db.select({
+    appId: appRevisions.appId, name: appRevisions.name,
+    status: appRevisions.status, sequence: appRevisions.sequence,
+  }).from(appRevisions).where(inArray(appRevisions.appId, apps.map(a => a.id)))
+    .orderBy(desc(appRevisions.sequence));
+  const latestByApp = new Map<string, typeof revisions[number]>();
+  for (const item of revisions) {
+    if (!latestByApp.has(item.appId)) latestByApp.set(item.appId, item);
+  }
+  return apps.map((app) => ({
+    ...app, latestName: latestByApp.get(app.id)?.name || "未命名应用",
+    latestStatus: latestByApp.get(app.id)?.status ?? "DRAFT",
+    sequence: latestByApp.get(app.id)?.sequence ?? 1,
+  }));
 }
 
 export async function getOwnedApplication(actor: Actor | null, appId: string) {
@@ -233,4 +248,40 @@ export async function getPublished(actor: Actor | null, appId: string) {
       eq(appRevisions.appId, applications.id))).limit(1);
   if (!found) throw new AppError(404, "not_found");
   return found;
+}
+
+/** Private review detail: never use it as a public catalog response. */
+export async function getPendingReview(actor: Actor | null, revisionId: string) {
+  await authorizeActor(actor, "review");
+  uuidOr404(revisionId);
+  const [candidate] = await db.select({
+    id: appRevisions.id,
+    appId: appRevisions.appId,
+    status: appRevisions.status,
+    sequence: appRevisions.sequence,
+    name: appRevisions.name,
+    summary: appRevisions.summary,
+    description: appRevisions.description,
+    category: appRevisions.category,
+    targetUrl: appRevisions.targetUrl,
+    iconRef: appRevisions.iconRef,
+    submittedAt: appRevisions.submittedAt,
+    createdBy: appRevisions.createdBy,
+    publishedRevisionId: applications.publishedRevisionId,
+  }).from(appRevisions)
+    .innerJoin(applications, eq(appRevisions.appId, applications.id))
+    .where(eq(appRevisions.id, revisionId)).limit(1);
+  if (!candidate || candidate.status !== "PENDING") throw new AppError(404, "not_found");
+  const [previous] = candidate.publishedRevisionId
+    ? await db.select({
+      name: appRevisions.name, summary: appRevisions.summary,
+      description: appRevisions.description, category: appRevisions.category,
+      targetUrl: appRevisions.targetUrl, iconRef: appRevisions.iconRef,
+    }).from(appRevisions).where(
+      and(eq(appRevisions.id, candidate.publishedRevisionId),
+        eq(appRevisions.appId, candidate.appId),
+        eq(appRevisions.status, "APPROVED")),
+    ).limit(1)
+    : [];
+  return { ...candidate, previous: previous ?? null };
 }
