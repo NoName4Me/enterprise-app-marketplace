@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { and, eq, like, sql } from "drizzle-orm";
-import { auth } from "../src/lib/auth";
+import { auth, createLocalFixtureUser } from "../src/lib/auth";
 import { db, rootDb } from "../src/db/client";
 import { account, securityEvents, user, verification } from "../src/db/schema";
 import { getActiveUser } from "../src/lib/active-user";
@@ -34,7 +34,7 @@ async function issue() {
   return new URLSearchParams(link.hash.slice(1)).get("token")!;
 }
 beforeAll(async () => {
-  const admin = await auth.api.createUser({ body: { name: "安全测试管理员", email: prefix + "-admin@example.test", password: initial, role: "admin" } });
+  const admin = await createLocalFixtureUser({ name: "安全测试管理员", email: prefix + "-admin@example.test", password: initial, role: "admin" });
   ids.push(admin.user.id);
   const signedIn = await login(admin.user.email, initial); expect(signedIn.status).toBe(200);
   const response = await change(cookieOf(signedIn)); expect(response.status).toBe(200); adminCookie = cookieOf(response);
@@ -59,6 +59,16 @@ describe.sequential("账号安全闭环", () => {
     const spoof = await auth.handler(request("/api/auth/update-user", { mustChangePassword: false, canCreateApp: true }, employeeCookie));
     expect([200,400]).toContain(spoof.status);
     const [stored] = await db.select().from(user).where(eq(user.id, employeeId)); expect(stored.canCreateApp).toBe(false);
+  });
+  it("普通员工不能通过角色或敏感字段创建管理员，管理员也不能绕过专用敏感字段入口", async () => {
+    for (const cookie of [employeeCookie, adminCookie]) {
+      for (const data of [{ role: "admin" }, { canCreateApp: true }, { mustChangePassword: false }, { emailVerified: true }, { banned: false }]) {
+        const response = await auth.handler(request("/api/auth/admin/create-user", { name: "非法提权", email: prefix + "-escalation@example.test", password: initial, role: "admin", data }, cookie));
+        expect(response.status).toBe(403);
+      }
+    }
+    expect((await auth.handler(request("/api/auth/admin/create-user", { name: "非法管理员", email: prefix + "-escalation@example.test", password: initial, role: "admin" }, employeeCookie))).status).toBe(403);
+    expect(await db.select().from(user).where(eq(user.email, prefix + "-escalation@example.test"))).toHaveLength(0);
   });
   it("只有管理员同源操作可生成重置；新链接使旧链接及会话失效，过期链接不可用", async () => {
     const context = { params: Promise.resolve({ id: employeeId }) };

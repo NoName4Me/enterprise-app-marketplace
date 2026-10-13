@@ -1,7 +1,7 @@
 import "dotenv/config";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
-import { auth } from "../src/lib/auth";
+import { createLocalFixtureUser } from "../src/lib/auth";
 import { db } from "../src/db/client";
 import { user, appFeedback, appFavorites } from "../src/db/schema";
 import { createApplication, submitDraft, reviewRevision, listPublished, listOwnedApplications, getPublished } from "../src/domain/app-service";
@@ -21,7 +21,7 @@ async function main() {
     }
     // Better Auth's documented trusted server API creates passwordless fixtures.
     // These users have no login credentials and cannot be used to sign in.
-    const result = await auth.api.createUser({ body: { email, name, role: "user", data: { canCreateApp: creator } } });
+    const result = await createLocalFixtureUser({ email, name, canCreateApp: creator });
     return { id: result.user.id };
   }
   const publisher = await demoAccount("demo-publisher@example.test", "演示应用负责人", true);
