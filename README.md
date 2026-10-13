@@ -2,7 +2,7 @@
 
 一个面向企业员工的内部应用市场：员工可以发现、使用、评价应用；获得创建权限的员工可以登记并提交应用，管理员审核后上架。产品参考应用商店的发现与互动机制，并支持通过自然语言查找适合的应用。
 
-> 当前状态：**T01 认证基础及 T02 应用发布服务端闭环已实现并通过 CI**；尚未完成应用登记、审核及目录的正式操作页面，也未部署生产环境。
+> 当前状态：**阶段 1 的登录→登记→审核→上架→浏览闭环已完成并通过 GitHub CI 与 Chromium E2E**。生产安全加固、真实环境部署以及评价/社区/AI 功能尚未完成。
 
 ## 产品范围
 
@@ -58,7 +58,7 @@ node scripts/bootstrap-admin.mjs --email admin@example.com --name Administrator
 pnpm dev
 ```
 
-浏览器打开 `http://localhost:3000/login`，登录后进入 `/apps`；管理员可在 `/admin/users` 开通员工、停用员工及维护应用创建权限。T02 已有真实数据模型和 HTTP API，但应用发布/审批操作页面属于后续 T03/T04；当前 `/apps` 仍是骨架页面。
+浏览器打开 `http://localhost:3000/login`，登录后进入 `/apps`；管理员可在 `/admin/users` 开通员工、停用员工及维护应用创建权限。T03/T04 已提供真实的应用登记、管理员审核及员工应用市场页面；所有操作均通过 T02 的权限与事务 API。
 
 **注意**：管理员初始化只可在空用户表上执行，不要使用生产密码命令行参数；首次执行时按 CLI 的交互提示输入密码。密码与 `DATABASE_URL` 等机密不能提交 GitHub。若使用其他邮箱，请替换命令中的示例地址。
 
@@ -73,3 +73,29 @@ pnpm dev
 - 员工公开查询：`/api/apps?q=`、`/api/apps/{id}`（只读取已批准且上架的版本）。
 
 详细请求、权限、返回值和验收结果见 [T02 实施记录](docs/engineering/T02_STATUS.md)、[T02 验收清单](docs/acceptance/T02_RESULTS.md)。未经认证无法使用这些接口。
+
+## 首个完整业务闭环（阶段 1）
+
+管理员在 `/admin/users` 开通员工并授予应用创建权限；发布者通过 `/my/apps` 创建草稿、提交审核并查看结果；管理员在 `/admin/reviews` 审批申请；员工可在 `/apps` 搜索、进入已上架应用详情并通过 HTTPS 外链访问。
+
+已上架应用修改信息时，必须建立新草稿并重新审核；审核期间员工始终看到之前批准的版本。
+
+### 验收与开发检查
+
+```sh
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+```
+
+数据库测试和 Chromium E2E **只能使用隔离测试数据库**。参考 [.github/workflows/t01-compatibility.yml](.github/workflows/t01-compatibility.yml) 中的 PostgreSQL fixture、管理员初始化和端到端执行顺序，不要直接对开发或生产数据库运行含写入/清理的集成测试。
+
+本地 Chromium 测试需要先安装浏览器（`pnpm exec playwright install chromium`），并准备与 CI 等效的独立测试账号/环境；随后运行 `pnpm test:e2e`。浏览器测试以 `http://localhost:3000` 为源，必须和 `BETTER_AUTH_URL` 保持一致。
+
+- [阶段 1 浏览器验收记录](docs/acceptance/MVP1_RESULTS.md)
+- [业务领域 API 验收记录](docs/acceptance/T02_RESULTS.md)
+- [上线前安全待办](https://github.com/NoName4Me/enterprise-app-marketplace/issues/5)
+
+**限制**：当前不是生产可用版本。首次登录强制修改初始密码、最后管理员的后端保护、完整敏感操作审计及目标托管环境验证尚未完成。
