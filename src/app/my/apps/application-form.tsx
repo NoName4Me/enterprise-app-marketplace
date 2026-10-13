@@ -39,10 +39,12 @@ export function ApplicationForm({
   }
   async function run(submit: boolean) {
     setBusy(true); setError(""); setNotice("");
+    let createdId: string | undefined;
     try {
       const target = mode === "create" ? "/api/my/apps" : `/api/my/apps/${appId}`;
       const result = await send(target, mode === "create" ? "POST" : "PATCH", form);
       const id = mode === "create" ? result.id as string : appId!;
+      if (mode === "create") createdId = id;
       if (submit) await send(`/api/my/apps/${id}/submit`, "POST");
       setNotice(submit ? "已提交审核。" : "草稿已保存。");
       if (mode === "create") router.push(`/my/apps/${id}`);
@@ -50,6 +52,7 @@ export function ApplicationForm({
     } catch (cause) {
       const e = cause as { code?: string; status?: number };
       setError(explainError(e.code, e.status));
+      if (createdId) router.push(`/my/apps/${createdId}`);
     } finally { setBusy(false); }
   }
   function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -58,9 +61,9 @@ export function ApplicationForm({
   }
   return <form onSubmit={onSubmit} className="card form-panel">
     <h2>{mode === "create" ? "应用基本信息" : "编辑草稿"}</h2>
-    <label>名称 <input aria-label="应用名称" maxLength={120} required value={form.name}
+    <label>名称 <input aria-label="应用名称" maxLength={120} value={form.name}
       onChange={event => set("name", event.target.value)} /></label>
-    <label>简介 <input aria-label="应用简介" maxLength={300} required value={form.summary}
+    <label>简介 <input aria-label="应用简介" maxLength={300} value={form.summary}
       onChange={event => set("summary", event.target.value)} /></label>
     <label>所属分类
       <select aria-label="应用分类" value={form.category}
@@ -71,7 +74,7 @@ export function ApplicationForm({
     <label>应用详细描述 <textarea aria-label="应用详细描述" maxLength={5000} rows={5}
       value={form.description} onChange={event => set("description", event.target.value)} /></label>
     <label>HTTPS 访问地址 <input type="url" aria-label="HTTPS 访问地址"
-      placeholder="https://apps.example.com" required value={form.targetUrl}
+      placeholder="https://apps.example.com" value={form.targetUrl}
       onChange={event => set("targetUrl", event.target.value)} /></label>
     <label>图标 HTTPS 地址（可选） <input type="url" aria-label="图标地址"
       placeholder="https://..." value={form.iconRef ?? ""}
