@@ -1,6 +1,6 @@
 # T05 容器交付与发布检查
 
-状态：CI Docker 构建/烟测尚待验证；不是生产部署。
+状态：**CI Docker 构建与真实容器烟测 PASS；生产部署 NOT RUN**。
 
 ## 运行模型
 Next.js standalone Node 单体，PostgreSQL 独立运行；版本化迁移必须由发布流程单独执行，应用启动不自动执行迁移。
@@ -29,3 +29,9 @@ Next.js standalone Node 单体，PostgreSQL 独立运行；版本化迁移必须
 - 真实企业云账户、DNS/TLS、PostgreSQL 和备份恢复环境；因此尚未进行生产部署。
 - Sites 的 Node runtime、外部数据库、密钥与迁移支持尚未通过实测。
 - 供应链：基础镜像目前固定 Node 22 主版本，正式上线需按 digest pin 和漏洞扫描策略治理。
+
+## 2026-10-13 CI 证据
+
+- [T05 GitHub Actions：Docker 构建、Chromium E2E 与容器 PostgreSQL 冒烟全部通过](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38360524603)。
+- 经测试的容器使用 Node 22 standalone、非 root 运行；连接 PostgreSQL 测试 DB，health 返回 200 和 status=ok，匿名 GET /api/apps 返回 401。
+- 这些检查未验证真实企业 DNS/TLS/云平台、正式密钥与生产数据备份。
