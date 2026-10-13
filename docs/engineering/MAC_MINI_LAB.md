@@ -1,6 +1,6 @@
 # Mac mini M4 实验服务器与云端 CI 混合环境
 
-- 日期：2026-10-13；状态：**实施方案，尚未在用户设备执行，所有验证项待 Work 实测**。
+- 日期：2026-10-13；状态：**LAB-T00/T01 已在用户 Mac mini/OrbStack 实测；GHCR/digest 部署 LAB-T02 仍 BLOCKED**。详见 [本机证据](LAB_T01.md)。
 - 硬件：Apple Silicon M4，统一内存 16GB，内部存储 256GB。
 - 目标：**真实模拟单机应用从需求/代码 → GitHub CI → 镜像 → 本地部署 → 监控告警 → 诊断/修复 → 发布验证**；不是复刻企业多集群高可用灾备。
 - 原则：最小可复现、分层启用、隔离测试数据、保留停止/回滚路径。
@@ -30,8 +30,8 @@ GitHub Actions 执行真实测试与容器构建，并推送 GHCR。Mac mini 主
 ## 设备可行性与资源预算（Work 必须测量，不是固定占用）
 
 - Mac mini 16GB 适合少量低负载 Node/Postgres/监控容器 + 云端构建；**不同时运行本地大模型、多个重度构建器和完整 GitLab**。
-- Docker Desktop 的 Linux VM 可先设置约 **6–8GB** 内存上限，留给 macOS/IDE/浏览器足够余量；仅为初始试验值，观察 `docker stats` 与系统内存压力后调整。
-- Docker 镜像/卷磁盘上限可先按约 **35–50GB** 规划；Docker Desktop 上限不等于已经写入这些数据。定期检查 `docker system df`，不要执行破坏性全卷清理；将备份单独保存。
+- OrbStack 的 Linux VM 可先设置约 **6–8GB** 内存上限，留给 macOS/IDE/浏览器足够余量；仅为初始试验值，观察 `docker stats` 与系统内存压力后调整。
+- Docker 镜像/卷磁盘上限可先按约 **35–50GB** 规划；OrbStack 上限不等于已经写入这些数据。定期检查 `docker system df`，不要执行破坏性全卷清理；将备份单独保存。
 - 监控只保留短期演示指标（如 3–7 天），限制日志量和容器数量。实际总占用以运行证据为准。
 - Apple Silicon 镜像需支持 `linux/arm64`；GitHub `ubuntu-latest` 默认使用 x64，LAB-T02 必须显式验证 arm64 构建：可评估 `ubuntu-24.04-arm` Runner 或 Buildx 多架构构建，**不能直接假设 x64 制品在 M4 本机原生运行**。
 
@@ -45,7 +45,7 @@ GitHub Actions 执行真实测试与容器构建，并推送 GHCR。Mac mini 主
 6. Docker Socket 与宿主机 Shell 属高风险；若后来要做自动拉取式部署，不提供任意 Shell/镜像/路径/仓库输入，使用有允许列表和签名/授权机制的部署 Agent。
 7. Postgres `compose.yaml` 里的 `localdev` 只适合当前受控本机开发；开发、自动化测试和部署演练不得共享数据库或登录密钥。不得导入真实员工数据。
 8. 运行器和镜像安全策略不能单靠 AI 判断；发布前 CI 状态、Commit SHA、digest 和环境批准状态必须由确定性程序检验。
-9. Docker Desktop 许可因组织规模/商业使用条件而异；若从个人学习转入公司实际部署，应核对许可证。Mac 上的 Docker Desktop 运行在 Linux 虚拟机中，不代表原生 Linux 生产主机兼容性已经完全验证。
+9. OrbStack 许可因个人/商业用途而异；若转入公司实际部署，应核对官方许可证。Mac 上的 OrbStack 运行 Linux 虚拟机，不代表原生 Linux 生产主机兼容性已经完全验证。
 
 ## 分阶段环境建设
 
@@ -98,6 +98,7 @@ corepack pnpm --version
 - GHCR：https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry
 - GitHub Actions 容器发布：https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images
 - GitHub Self-hosted Runner 安全：https://docs.github.com/en/actions/reference/security/secure-use
-- Docker Desktop Mac：https://docs.docker.com/desktop/setup/install/mac-install/
+- OrbStack Docker：https://docs.orbstack.dev/docker/
+- OrbStack 设置：https://docs.orbstack.dev/settings
 - Prometheus：https://prometheus.io/docs/introduction/overview/
 - Alertmanager：https://prometheus.io/docs/alerting/latest/alertmanager/

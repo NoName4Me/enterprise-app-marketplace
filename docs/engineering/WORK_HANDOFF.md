@@ -4,7 +4,7 @@
 - 仓库：`NoName4Me/enterprise-app-marketplace`，主分支 `master`；现有业务代码为事实来源，不假设旧教程或生成代码正确。
 - 执行基线：[新路线图](../ROADMAP.md)、[候选需求](../product/EXPANSION_BACKLOG.md)、[架构 ADR](../decisions/ADR-002-platform-evolution.md)、[Mac mini 实验方案](MAC_MINI_LAB.md)、[验收](../acceptance/NEXT_PHASE_GATES.md)。
 - 每次 Work 只领取下述**一个可验收任务包**；不要在同一次任务里提前实现 P1–P8。用户要求中文 Conventional Commits（`type(scope): 中文说明`）、小范围可验证变更、GitHub 真实检查。
-- 目前仓库最新主 CI 仍在管理员初始化失败。**任何部署/自动化之前先完成 P0**。
+- 2026-10-14补充：P0-T01已由PR #15修复并全量CI通过；P0-T02代码由PR #16交付，但真实分支保护受GitHub二次认证阻塞。LAB-T00/T01已在OrbStack本机实测；**GHCR/digest LAB-T02仍需P0真实门禁闭环**。详见P0_T02.md与LAB_T01.md。
 
 ## 开始前的统一检查（每个任务都做）
 
@@ -38,7 +38,7 @@
 
 ## LAB-T00/T01：Mac mini 设备清点与最小运行环境
 
-**先确认 Mac 环境可访问。** Work 若运行在云端而无法访问用户 Mac 的 Docker Desktop，不得假称“已部署本地”。允许产出可执行配置与本地验证指令，证据待用户 Mac 执行再闭环。
+**先确认 Mac 环境可访问。** Work 若运行在云端而无法访问用户 Mac 的 OrbStack/Docker，不得假称“已部署本地”。允许产出可执行配置与本地验证指令，证据待用户 Mac 执行再闭环。
 
 - 根据 [Mac mini 运行手册](MAC_MINI_LAB.md) 检查 M4/16GB/256GB、Docker 架构/内存/磁盘、端口、Node 和 pnpm、已有容器/数据库。
 - 只复用或增量改进现有 PostgreSQL compose，并提供独立测试数据；不安装 Jenkins/GitLab/K8s。

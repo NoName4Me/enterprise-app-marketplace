@@ -43,3 +43,10 @@
 ## 证据保存
 
 每批 Work 将测试命令、返回码、GitHub run/PR、环境版本、SHA/digest、日志摘要、截图（如适用）及未覆盖场景写入对应 PR 描述或工程记录。公共仓库不得保存登录密码、Token、内部敏感日志和员工数据。
+
+## 2026-10-14 实测更新
+
+- GATE-01/02/03 PASS：P0-T01 PR #15 最新提交全量 [CI](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38427220144)；P0-T02依赖修补后全量 [CI](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38428935965)。
+- GATE-04 BLOCKED：尚无生效分支保护；保存遇GitHub二次认证。检查失败不等于合并阻断，具体步骤见[记录](../engineering/P0_T02.md)。
+- LAB-01 PASS：实际Mac M4/OrbStack，隔离数据库、门户和实验服务启动/持久化/故障恢复/停止，详见[本机证据](../engineering/LAB_T01.md)及对应PR最新SHA检查。
+- LAB-02/03/04 BLOCKED/NOT RUN：未发布GHCR、未按GHCR digest部署和回滚；须先闭环GATE-04。
