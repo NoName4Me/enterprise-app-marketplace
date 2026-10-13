@@ -11,6 +11,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -26,13 +27,16 @@ jobs:
       AUTH_TRUSTED_IP_HEADER: x-test-client-ip
       BETTER_AUTH_SECRET: ci-only-placeholder-keep-out-of-production-12345678
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with: { version: 10.17.1 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: "22" }
       - name: Install with locked dependencies
         run: pnpm install --frozen-lockfile
+      - name: Audit production dependencies (block high and critical)
+        run: pnpm audit --prod --audit-level=high --registry=https://registry.npmjs.org
       - name: Generate and apply migration
         run: |
           pnpm db:generate
@@ -51,7 +55,7 @@ jobs:
       - name: Generate auth schema reference
         run: pnpm dlx auth@1.7.6 generate --adapter drizzle --dialect postgresql --config ./src/lib/auth.ts --output ./auth-schema.generated.ts --yes
       - name: Upload generated auth reference
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: better-auth-reference-schema
           path: auth-schema.generated.ts
@@ -94,7 +98,7 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3100/api/apps)" = "401"
       - name: Upload screenshots on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: e2e-failure
           path: test-results/

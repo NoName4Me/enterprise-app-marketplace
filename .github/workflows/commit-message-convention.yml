@@ -2,17 +2,22 @@ name: 规范化提交检查
 on:
   push:
     branches: [master]
-  pull_request:
+  pull_request_target:
+    branches: [master]
     types: [opened, reopened, synchronize, edited]
 permissions:
   contents: read
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+          # Never execute PR head code in pull_request_target.
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          persist-credentials: false
       - name: 验证 Conventional Commits 中文提交规范
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}

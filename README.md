@@ -2,7 +2,7 @@
 
 > **新一轮已确认规划（2026-10-13）**：本仓库将从原有企业内部应用市场，逐步演进为**企业应用治理与 AI 自动化运维门户**。保留既有已实现功能；按 P0–P8 推进资产/生命周期、使用申请、需求中心、真实 AI 发现、运维信息聚合、人机协作 AI 开发与受控智能运维。**Agent/工作流市场暂缓，独立论坛低优先级。** 目前仍是实验项目，未完成生产部署。
 
-> **重要当前阻塞**：最新已检查的 `master` 主 CI 在管理员 bootstrap 失败，后续全量测试未运行；详见 [P0 任务包](docs/engineering/WORK_HANDOFF.md)。不要将历史 CI 通过误认为最新版本已通过。
+> **当前进度**：P0-T01 已由 [PR #15](https://github.com/NoName4Me/enterprise-app-marketplace/pull/15) 修复并通过全量 CI；P0-T02 真实分支保护仍受 GitHub 二次认证阻塞，详见 [门禁证据](docs/engineering/P0_T02.md)。
 
 **明天交给 Work 的执行入口**：[任务包](docs/engineering/WORK_HANDOFF.md) · [优先级路线图](docs/ROADMAP.md) · [Mac mini 混合实验环境](docs/engineering/MAC_MINI_LAB.md) · [架构决策 ADR-002](docs/decisions/ADR-002-platform-evolution.md) · [验收门槛](docs/acceptance/NEXT_PHASE_GATES.md) · [候选需求池](docs/product/EXPANSION_BACKLOG.md)。
 
