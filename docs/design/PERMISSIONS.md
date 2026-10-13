@@ -35,7 +35,7 @@
 ## 3. 身份生命周期（实施假设）
 
 - **不开放自助注册**：管理员负责员工账号开通/停用；员工仅能登录或修改自己的密码。
-- **首个管理员**：使用仓库的 `scripts/bootstrap-admin.mjs`，在 PostgreSQL advisory lock 下检查用户表为空，随后调用 Better Auth 的官方 CLI 创建管理员并交互输入密码，不能将真实密码写在日志或 Shell 参数中。任何已有用户均拒绝再次运行。
+- **首个管理员**：使用仓库的 `scripts/bootstrap-admin.mjs`，在 PostgreSQL advisory lock 下检查用户表为空，随后调用 Better Auth 的官方服务端 API 创建管理员并交互输入密码，不能将真实密码写在日志或 Shell 参数中。任何已有用户均拒绝再次运行。
 - **普通员工开通**：管理员使用 Better Auth Admin 插件的受控接口开通员工；当前由管理员输入初始密码并通过安全渠道告知用户。首次登录强制改密与受控一次性重置已实现；见 [账号安全交付](../engineering/ACCOUNT_SECURITY.md)。
 - **账号停用/撤权**：停用/恢复使用 Better Auth Admin 插件 ban/unban；服务端每次读取 live banned、role、canCreateApp；撤权后旧 session 无法继续越权操作。管理员禁用登录及旧 session 失效已在隔离数据库测试中验证。
 - **密码重置**：首轮管理员发起受控重置（重置凭据一次性可用），不接入邮件服务；正式上线是否要求自助重置与邮件通知，在部署前重新评估。

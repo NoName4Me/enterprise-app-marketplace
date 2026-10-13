@@ -13,7 +13,7 @@
 
 1. **模块化单体、同源全栈**：Next.js App Router + React + TypeScript，使用 Node runtime 处理服务端页面与 API；仅在形成真实系统边界后才拆服务。
 2. **数据库**：PostgreSQL。使用 Drizzle ORM 和受控迁移，利用关系约束、事务、局部唯一索引保护审批不变量。
-3. **身份认证**：Better Auth 邮箱密码登录、官方 Admin 插件和服务端 Session；禁用自助注册。采用数据库排他锁封装官方 CLI 引导首个管理员，后续员工由插件管理；`canCreateApp` 是独立的业务权限，不由管理员角色隐式授予。账号封禁、恢复和旧会话失效已由 DB 集成测试验证，首登改密及最后管理员保护仍为生产上线阻断项。
+3. **身份认证**：Better Auth 邮箱密码登录、官方 Admin 插件和服务端 Session；禁用自助注册。采用数据库排他锁封装官方服务端 API 引导首个管理员，后续员工由插件管理；`canCreateApp` 是独立的业务权限，不由管理员角色隐式授予。账号封禁、恢复和旧会话失效已由 DB 集成测试验证，首登改密及最后管理员保护仍为生产上线阻断项。
 4. **应用审批领域模型**：逻辑 App + immutable review snapshots + approved published pointer。UI/API 公开查询只走已发布指针。新应用先搭结构，后续更新复审沿用结构。
 5. **质量工具**：TypeScript strict、ESLint、Vitest（单元 + PostgreSQL 集成）、Playwright E2E。CI 规则以实际可执行证据为准。
 6. **部署**：Node.js/Docker 与外部 PostgreSQL 作为可移植目标；Sites 仅待后续适配 Spike，并非已经可用的后端托管方案。
@@ -60,4 +60,4 @@
 
 早期设想使用自定义 `isAdmin` / `disabled` 字段，实际改为 Better Auth Admin 插件的 `role` / `banned`；原因是使用经过版本化验证的账号创建、禁用/恢复和 Session 撤销机制优于自研这些安全敏感逻辑。业务创建权继续使用 `canCreateApp`，在受保护请求中实时读取 PostgreSQL。
 
-Better Auth 官方 CLI 的重复管理员创建确认在非交互环境可能以退出码 0 返回，因此外层脚本必须先锁住数据库、检查用户表为空，并在创建后验证唯一管理员账号，不能仅依赖 CLI 返回码。
+P0-T01 使用受控的 Better Auth 官方服务端 API，替代会重新实例化配置的 CLI；外层脚本保留 advisory lock，事务内锁表复查空库，并验证唯一管理员账号。详见 [修复证据与权衡](../engineering/P0_T01.md)。

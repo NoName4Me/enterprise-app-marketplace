@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { admin } from "better-auth/plugins";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
-import { and, eq, inArray, like } from "drizzle-orm";
+import { and, eq, inArray, like, sql } from "drizzle-orm";
 import { db, inDatabaseTransaction, rootDb } from "@/db/client";
 import * as schema from "@/db/schema";
 import { authRateStorage, sensitiveActions } from "./security-policy";
@@ -19,6 +19,7 @@ type AccountState = { role: string | null; banned: boolean | null; canCreateApp:
 function snapshot(record: AccountState) {
   return { role: record.role, banned: record.banned, canCreateApp: record.canCreateApp, mustChangePassword: record.mustChangePassword };
 }
+const provisioning = new AsyncLocalStorage<{ kind: "bootstrap" | "fixture" }>();
 const recovery = new AsyncLocalStorage<{ targetId: string; url?: string }>();
 const operations = new AsyncLocalStorage<{ actorId?: string; targetId?: string; before?: ReturnType<typeof snapshot> }>();
 async function invalidateRecovery(userId: string) {
@@ -63,7 +64,8 @@ const nativeAuth = betterAuth({
       if (ctx.path === "/request-password-reset" && !recovery.getStore()) throw new APIError("FORBIDDEN", { message: "请联系管理员核实身份并重置密码" });
       if (["/admin/set-user-password", "/admin/impersonate-user", "/admin/stop-impersonating"].includes(ctx.path)) throw new APIError("FORBIDDEN", { message: "请使用受控账号管理流程" });
       if (ctx.path === "/reset-password" && typeof ctx.body?.token !== "string") throw new APIError("BAD_REQUEST", { message: "请使用有效重置链接" });
-      if (ctx.path === "/admin/create-user" && Object.keys(ctx.body?.data ?? {}).some(key => !["image"].includes(key))) throw new APIError("FORBIDDEN", { message: "敏感字段必须使用专用管理入口" });
+      const trustedProvisioning = ctx.path === "/admin/create-user" && provisioning.getStore() && !ctx.request && !ctx.headers;
+      if (ctx.path === "/admin/create-user" && !trustedProvisioning && Object.keys(ctx.body?.data ?? {}).some(key => !["image"].includes(key))) throw new APIError("FORBIDDEN", { message: "敏感字段必须使用专用管理入口" });
       if (ctx.path === "/change-password") {
         if (ctx.body?.currentPassword === ctx.body?.newPassword) throw new APIError("BAD_REQUEST", { message: "新密码不能与原密码相同" });
         ctx.body.revokeOtherSessions = true;
@@ -71,8 +73,9 @@ const nativeAuth = betterAuth({
       // Session resolution is allowed even for an account awaiting its first password change.
       if (["/get-session", "/sign-in/email", "/sign-out", "/reset-password", "/request-password-reset"].includes(ctx.path) || ctx.path.startsWith("/reset-password/")) return;
       const current = await getSessionFromCtx(ctx);
-      // Official trusted server provisioning (bootstrap/demo) has no request or session.
-      if (!current && ctx.path === "/admin/create-user" && !ctx.request && !ctx.headers?.get("cookie")) return;
+      // Only our scoped provisioning functions can authorize sessionless creation.
+      if (trustedProvisioning) return;
+      if (!current && ctx.path === "/admin/create-user") throw new APIError("UNAUTHORIZED", { message: "需要管理员会话或受控初始化入口" });
       if (!current) return; // Library middleware denies anonymous protected endpoints.
       const [record] = await db.select().from(schema.user).where(eq(schema.user.id, current.user.id)).limit(1);
       if (!record || record.banned) throw new APIError("UNAUTHORIZED", { message: "账号不可用" });
@@ -152,4 +155,29 @@ export async function issueRecoveryLink(targetId: string, email: string, headers
   await recovery.run(context, () => nativeAuth.api.requestPasswordReset({ headers, body: { email, redirectTo: `${process.env.BETTER_AUTH_URL}/reset-password` } }));
   if (!context.url) throw new Error("Recovery link was not issued");
   return context.url;
+}
+
+// Kept outside auth.api and HTTP routes; caller supplies only identity/password.
+// Better Auth still owns password hashing and account creation. Audit is atomic.
+export async function bootstrapInitialAdministrator(input: { email: string; name: string; password: string }) {
+  return inDatabaseTransaction(async () => {
+    await db.execute(sql`LOCK TABLE "user" IN SHARE ROW EXCLUSIVE MODE`);
+    if ((await db.select({ id: schema.user.id }).from(schema.user).limit(1)).length) {
+      throw new Error("Bootstrap refused: database already contains users.");
+    }
+    if (input.password.length < 12 || input.password.length > 128) throw new Error("Password must contain 12–128 characters.");
+    return provisioning.run({ kind: "bootstrap" }, () => nativeAuth.api.createUser({ body: {
+      email: input.email, name: input.name, password: input.password, role: "admin", data: { emailVerified: true },
+    } }));
+  });
+}
+
+// Explicit local fixtures, never reachable from the web auth handler.
+export async function createLocalFixtureUser(input: { email: string; name: string; password?: string; role?: "admin" | "user"; canCreateApp?: boolean }) {
+  const url = new URL(process.env.DATABASE_URL!);
+  if (process.env.NODE_ENV === "production" || !["localhost", "127.0.0.1"].includes(url.hostname) || !input.email.endsWith("@example.test")) throw new Error("Local synthetic fixtures only.");
+  if (input.role === "admin" && (process.env.CI !== "true" || url.pathname !== "/market_test")) throw new Error("Administrator fixtures require the isolated CI database.");
+  return inDatabaseTransaction(() => provisioning.run({ kind: "fixture" }, () => nativeAuth.api.createUser({ body: {
+    email: input.email, name: input.name, password: input.password, role: input.role ?? "user", data: { canCreateApp: input.canCreateApp ?? false },
+  } })));
 }
