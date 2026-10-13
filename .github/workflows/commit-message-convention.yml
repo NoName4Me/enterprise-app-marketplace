@@ -1,0 +1,19 @@
+name: 规范化提交检查
+on:
+  push:
+    branches: [master]
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 验证 Conventional Commits 中文提交规范
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: node scripts/check-commit-messages.mjs
