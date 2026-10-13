@@ -1,7 +1,7 @@
 name: CI - auth and foundation
 on:
   push:
-    branches: [master, feat/stage1-t01-foundation]
+    branches: [master, feat/t02-publishing-domain]
   pull_request:
     branches: [master]
 

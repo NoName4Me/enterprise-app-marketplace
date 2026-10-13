@@ -2,7 +2,7 @@
 
 一个面向企业员工的内部应用市场：员工可以发现、使用、评价应用；获得创建权限的员工可以登记并提交应用，管理员审核后上架。产品参考应用商店的发现与互动机制，并支持通过自然语言查找适合的应用。
 
-> 当前状态：**T01 认证与工程骨架已实现并完成 CI 验证**；尚未实现应用登记、发布审核与市场搜索；未部署生产环境。
+> 当前状态：**T01 认证基础及 T02 应用发布服务端闭环已实现并通过 CI**；尚未完成应用登记、审核及目录的正式操作页面，也未部署生产环境。
 
 ## 产品范围
 
@@ -58,10 +58,18 @@ node scripts/bootstrap-admin.mjs --email admin@example.com --name Administrator
 pnpm dev
 ```
 
-浏览器打开 `http://localhost:3000/login`，登录后进入 `/apps`；管理员可在 `/admin/users` 开通员工、停用员工及维护应用创建权限。应用市场业务尚未实现。
+浏览器打开 `http://localhost:3000/login`，登录后进入 `/apps`；管理员可在 `/admin/users` 开通员工、停用员工及维护应用创建权限。T02 已有真实数据模型和 HTTP API，但应用发布/审批操作页面属于后续 T03/T04；当前 `/apps` 仍是骨架页面。
 
 **注意**：管理员初始化只可在空用户表上执行，不要使用生产密码命令行参数；首次执行时按 CLI 的交互提示输入密码。密码与 `DATABASE_URL` 等机密不能提交 GitHub。若使用其他邮箱，请替换命令中的示例地址。
 
 自动化数据库集成测试会操作用户表，必须使用独立的测试数据库，不能直接对已有真实数据的开发/生产数据库执行；CI 使用独立 PostgreSQL fixture。正式上线前还需首登改密、账号恢复、最后管理员保护和浏览器 E2E 安全验收。
 
 详细信息：[认证与管理员初始化](docs/engineering/T01_AUTH_SETUP.md)、[T01 验证记录](docs/engineering/T01_STATUS.md)。
+
+## 服务端应用发布 API（T02）
+
+- 创建、编辑、提交与管理自己的草稿：`/api/my/apps`、`/api/my/apps/{id}`、`/api/my/apps/{id}/submit`、`/api/my/apps/{id}/draft`。
+- 管理员审核：`/api/admin/reviews`、`/api/admin/reviews/{revisionId}/approve` 或 `/reject`。
+- 员工公开查询：`/api/apps?q=`、`/api/apps/{id}`（只读取已批准且上架的版本）。
+
+详细请求、权限、返回值和验收结果见 [T02 实施记录](docs/engineering/T02_STATUS.md)、[T02 验收清单](docs/acceptance/T02_RESULTS.md)。未经认证无法使用这些接口。
