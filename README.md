@@ -99,3 +99,7 @@ pnpm build
 - [上线前安全待办](https://github.com/NoName4Me/enterprise-app-marketplace/issues/5)
 
 **限制**：当前不是生产可用版本。首次登录强制修改初始密码、最后管理员的后端保护、完整敏感操作审计及目标托管环境验证尚未完成。
+
+## 容器交付（T05）
+
+通过 Docker 多阶段构建得到非 root Node.js standalone 镜像。真实 CI 已执行镜像构建、连接 PostgreSQL 的容器启动、健康检查和匿名接口 401 验证。操作步骤、数据库迁移及回退要求见 [T05 容器交付记录](docs/engineering/T05_CONTAINER.md)。此检查不代表已部署到生产环境。
