@@ -1,0 +1,31 @@
+# One-time, feature-branch-only migration generation. DELETE before merge.
+name: T02 migration bootstrap
+on:
+  push:
+    branches: [feat/t02-publishing-domain]
+permissions:
+  contents: write
+jobs:
+  generate:
+    if: "!contains(github.event.head_commit.message, 'chore(t02): record generated migration')"
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://market:fixture@localhost:5432/market_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.17.1 }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: pnpm install --frozen-lockfile
+      - name: Generate T02 migration
+        run: pnpm db:generate
+      - name: Record generated migration in feature branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add drizzle/
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(t02): record generated migration"
+            git push origin HEAD:feat/t02-publishing-domain
+          fi
