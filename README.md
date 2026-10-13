@@ -1,5 +1,11 @@
 # 企业内部应用市场（Enterprise App Marketplace）
 
+> **新一轮已确认规划（2026-10-13）**：本仓库将从原有企业内部应用市场，逐步演进为**企业应用治理与 AI 自动化运维门户**。保留既有已实现功能；按 P0–P8 推进资产/生命周期、使用申请、需求中心、真实 AI 发现、运维信息聚合、人机协作 AI 开发与受控智能运维。**Agent/工作流市场暂缓，独立论坛低优先级。** 目前仍是实验项目，未完成生产部署。
+
+> **重要当前阻塞**：最新已检查的 `master` 主 CI 在管理员 bootstrap 失败，后续全量测试未运行；详见 [P0 任务包](docs/engineering/WORK_HANDOFF.md)。不要将历史 CI 通过误认为最新版本已通过。
+
+**明天交给 Work 的执行入口**：[任务包](docs/engineering/WORK_HANDOFF.md) · [优先级路线图](docs/ROADMAP.md) · [Mac mini 混合实验环境](docs/engineering/MAC_MINI_LAB.md) · [架构决策 ADR-002](docs/decisions/ADR-002-platform-evolution.md) · [验收门槛](docs/acceptance/NEXT_PHASE_GATES.md) · [候选需求池](docs/product/EXPANSION_BACKLOG.md)。
+
 一个面向企业员工的内部应用市场：员工可以发现、使用、评价应用；获得创建权限的员工可以登记并提交应用，管理员审核后上架。产品参考应用商店的发现与互动机制，并支持通过自然语言查找适合的应用。
 
 > 当前状态：**阶段 1 的登录→登记→审核→上架→浏览闭环已完成并通过 GitHub CI 与 Chromium E2E**。本地增量已加入分类、收藏、排序、编辑推荐、上下架管理、评价和应用讨论，并提供场景找应用的关键词基线。真实 AI 模型与生产交付仍未完成。[增量范围和验证限制](docs/engineering/MARKETPLACE_FEATURES.md)。
@@ -38,7 +44,7 @@
 
 ## 当前不做的事
 
-当前已提出首轮框架与数据库方案，但未确定生产云平台或 AI 编排框架；不因远期需求预先构建复杂架构。
+现阶段不自建 GitLab/Jenkins/Kubernetes/完整监控存储，不开发 Agent/工作流市场和独立论坛。应用代码生成、自动发布和 AI 智能运维按 P5–P8 的执行权限与独立验收推进，不能把路线图当作已经落地的功能。历史阶段 0–5 的范围说明适用于 MVP-1，不应覆盖新路线图。
 
 ## 许可
 

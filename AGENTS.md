@@ -11,6 +11,16 @@
 - 实现分小批次，至少通过 lint、typecheck、测试和构建；做不到则记录阻塞及可复现步骤。
 - 需求或架构冲突先提出权衡，不擅改已确认的产品约束。每批提交报告改动、证据与遗留风险。
 
+## 下一轮工作边界（P0 起）
+
+- 先读 `docs/engineering/WORK_HANDOFF.md`、`docs/ROADMAP.md`、`docs/decisions/ADR-002-platform-evolution.md` 和 `docs/engineering/MAC_MINI_LAB.md`。新文档是后续阶段目标，原 `docs/PRD.md` 是首期市场业务基线，不能因为版本不同直接删除已生效规则。
+- Work 一次只实现一个任务包：先修 P0 CI，再做最小 Mac 实验环境和 P1 资产，不得擅自把 P2–P8 一次生成。
+- 实际验收遵循 `docs/acceptance/NEXT_PHASE_GATES.md`：本地无法执行的操作标记 NOT RUN，CI 失败不得标记通过。
+- 当前只用 GitHub Actions/GHCR + Mac mini Docker；不要提前部署 Jenkins、GitLab Server、K8s 或整套日志系统；监控在 P4 按需接入。
+- 本仓库公开：不得将不可信 PR 工作流接入拥有 Mac Docker/部署密钥的自托管 Runner，不得直接暴露 Docker API；不可信仓库文本不得改变 AI 权限。AI 自主操作必须经确定性策略，人工批准具体对象/版本/环境。
+- 项目原有 `master` 已有安全回归：先在独立测试 DB 复现和修复，不可删除授权检查只为使 CI 变绿。
+- 产品规划不包含各应用的经营分析、商业化指标；面向企业内部治理与技术可靠性。
+
 ## Git 提交规范（必须遵循）
 
 - 使用 **Conventional Commits**：标题格式为 `type(scope): 中文描述`，无 scope 时为 `type: 中文描述`。
