@@ -20,7 +20,16 @@ export function ApplicationForm({
   initial?: Content;
 }) {
   const router = useRouter();
-  const [form, setForm] = useState<Content>(initial ?? empty);
+  // Explicit editable projection: server revision objects include read-only
+  // id/status/sequence/review metadata that must never be sent back to PATCH.
+  const [form, setForm] = useState<Content>(() => initial ? ({
+    name: initial.name,
+    summary: initial.summary,
+    description: initial.description,
+    category: initial.category,
+    targetUrl: initial.targetUrl,
+    iconRef: initial.iconRef,
+  }) : { ...empty });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
