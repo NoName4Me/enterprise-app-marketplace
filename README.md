@@ -90,7 +90,7 @@ pnpm test
 pnpm build
 ```
 
-数据库测试和 Chromium E2E **只能使用隔离测试数据库**。参考 [.github/workflows/ci.yml](.github/workflows/ci.yml) 中的 PostgreSQL fixture、管理员初始化和端到端执行顺序，不要直接对开发或生产数据库运行含写入/清理的集成测试。
+数据库测试和 Chromium E2E **只能使用隔离测试数据库**。参考 [.github/workflows/t01-compatibility.yml](.github/workflows/t01-compatibility.yml) 中的 PostgreSQL fixture、管理员初始化和端到端执行顺序，不要直接对开发或生产数据库运行含写入/清理的集成测试。
 
 本地 Chromium 测试需要先安装浏览器（`pnpm exec playwright install chromium`），并准备与 CI 等效的独立测试账号/环境；随后运行 `pnpm test:e2e`。浏览器测试以 `http://localhost:3000` 为源，必须和 `BETTER_AUTH_URL` 保持一致。
 
