@@ -1,4 +1,4 @@
-name: CI - Marketplace
+name: CI - Marketplace and container smoke
 on:
   push:
     branches: [master]
@@ -66,6 +66,29 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Browser end-to-end journey
         run: pnpm test:e2e
+      - name: Build standalone production container
+        run: docker build --tag marketplace:ci .
+      - name: Smoke-test container using isolated CI PostgreSQL
+        run: |
+          set -euo pipefail
+          docker run --detach --rm --name marketplace-smoke --network host \
+            -e PORT=3100 \
+            -e HOSTNAME=127.0.0.1 \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e BETTER_AUTH_URL=http://localhost:3100 \
+            -e BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET" \
+            marketplace:ci
+          trap 'docker logs marketplace-smoke || true; docker rm -f marketplace-smoke || true' EXIT
+          healthy=false
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3100/api/health | grep -q '"status":"ok"'; then
+              healthy=true
+              break
+            fi
+            sleep 2
+          done
+          test "$healthy" = true
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3100/api/apps)" = "401"
       - name: Upload screenshots on failure
         if: failure()
         uses: actions/upload-artifact@v4

@@ -1,0 +1,16 @@
+.git
+.github
+node_modules
+.next
+.env
+.env.*
+test-results
+playwright-report
+coverage
+*.log
+*.tsbuildinfo
+docs
+drizzle
+e2e
+tests
+*.md
