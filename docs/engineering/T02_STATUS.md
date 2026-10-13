@@ -1,39 +1,46 @@
 # T02 实现与验证记录
 
-状态：**实现已提交到独立分支，已生成 SQL migration，待完整 CI 验证**。本任务交付 API/领域层及数据库测试，尚无面向员工的完整上架 UI。
+状态：**服务端发布/审核闭环及真实 PostgreSQL 集成测试已完成；正式页面、浏览器 E2E 和生产安全尚未完成。**
 
-## 业务模型与接口
+## 实现范围
 
-- 一个应用 `applications` + 多次不可变申请 `app_revisions` + 审核事件 `review_events`。
-- `listingStatus` 与 `publishedRevisionId` 仅由审核事务切换；PENDING 不影响旧版。
-- 支持 DRAFT 保存、提交 PENDING、通过/驳回、驳回后新建 revision、更新重新审核；审计与状态修改同一 PostgreSQL 事务。
-- 一个应用最多一个 DRAFT/PENDING 由 PostgreSQL partial unique index 约束。
-- 服务端每次请求查询 Session 和账号权限；只使用 Session 的用户 ID，不接受客户端传入 owner 或 status。
-- `GET /api/apps?q=...`、`GET /api/apps/:id` 仅返回已上架版本的白名单字段。
+- 三张业务表：`applications` / `app_revisions` / `review_events`，包含外键、版本序号唯一约束、单活动申请局部唯一索引及基本检查约束。
+- 新建、编辑草稿；提交 PENDING；管理员通过/驳回（必须说明理由）；驳回后建立新草稿；已上架应用可以新建更新申请。
+- 审批状态切换、发布指针和审计事件在**同一 PostgreSQL 事务**中完成。对同一申请的并发审核只能一个成功。
+- HTTP API 在服务端从 Session 提取身份，读取数据库实时校验创建/审核权及所有权，不能透传客户端身份、状态和审核人。
+- 公共目录只读取 `LISTED` 且指向已批准的正确应用信息快照，不公开 DRAFT/PENDING/REJECTED 的内容，旧版在审核期间继续可见。
+- 校验仅允许 HTTPS Web URL、不允许 URL 凭据和危险协议；拦截额外的 owner/status 字段。
 
-## 暴露的 HTTP API
+## HTTP API
 
-| 动作 | 路由 | 权限 |
+| 请求 | 用途 | 授权 |
 | --- | --- | --- |
-| 创建应用草稿 | POST /api/my/apps | canCreateApp |
-| 我的应用 | GET /api/my/apps | active employee |
-| 我的详情/修改草稿 | GET/PATCH /api/my/apps/:id | owner (PATCH needs creator permission) |
-| 新建一份后续草稿 | POST /api/my/apps/:id/draft | owner + creator permission，旧申请须已终结 |
-| 提交审核 | POST /api/my/apps/:id/submit | owner + creator permission |
-| 待审列表 | GET /api/admin/reviews | admin |
-| 审批通过/驳回 | POST /api/admin/reviews/:revisionId/approve 或 /reject | admin，不能自审 |
-| 员工目录/公开详情 | GET /api/apps?q=...、GET /api/apps/:id | 登录用户，只看已发布 |
+| POST /api/my/apps | 创建草稿 | 创建权限 |
+| GET /api/my/apps | 自己的应用列表 | 登录 |
+| GET /api/my/apps/:id | 自己的应用与各版审核结果 | 所有者 |
+| PATCH /api/my/apps/:id | 编辑 DRAFT 内容 | 所有者 + 创建权 |
+| POST /api/my/apps/:id/submit | 提交审核 | 所有者 + 创建权 |
+| POST /api/my/apps/:id/draft | 从终结版本建立下一份草稿 | 所有者 + 创建权 |
+| GET /api/admin/reviews | 待审申请队列 | 管理员 |
+| POST /api/admin/reviews/:revisionId/approve | 批准申请 | 非申请人的管理员 |
+| POST /api/admin/reviews/:revisionId/reject | 驳回申请（JSON: `{"reason":"..." }`） | 非申请人的管理员 |
+| GET /api/apps?q= | 名称关键词查询已上架应用 | 登录 |
+| GET /api/apps/:id | 公开当前批准版本详情 | 登录 |
 
-客户端草稿内容字段：name、summary、description、category（office/analytics/development/collaboration/other）、targetUrl（HTTPS）、iconRef（HTTPS 可选）。提交需至少 name、summary 和 targetUrl 非空。
+创建/修改的 JSON 可用字段：`name`、`summary`、`description`、`category`、`targetUrl`、`iconRef`。分类暂限定 `office/analytics/development/collaboration/other`；提交时 name、summary 和 HTTPS targetUrl 必填。错误使用稳定的 `error` 字段及 401/403/404/409/422 状态码；未知服务器异常返回 500。
 
-## 重要未完成/限制
+## 验证
 
-- 尚未构建完整上架、审核、目录的页面 UI；由 T03/T04 完成。
-- 未做下架、社区和 AI 发现；首轮不在该任务实现。
-- `published_revision_id` 当前由事务校验正确性，数据库级“属于同一 app 且状态已批准”的跨表约束仍需后续评审；公开读取双重校验确保不泄露未批准版本。
-- 第一版以 PostgreSQL 事务控制审核竞争；仍须 CI 真实证明并发测试。
-- 尚未完成产品上线安全审计、后端最后管理员保护及浏览器 E2E（Issue #5）。
+- [GitHub Actions：T02 真实 PostgreSQL 集成测试 + TypeScript + Lint + Unit + Production Build 全绿](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38356442444)。
+- DB 集成测试：**9 passed**（含 T01 账号测试和 T02 审核测试），单元测试：**2 passed**。
+- T02 场景逐项证据与未执行项：[T02_RESULTS](../acceptance/T02_RESULTS.md)。
+- 过程中的一次 CI 失败是测试夹具 `role` TypeScript 类型过宽，已修正；初次运行发现 SQL 迁移未提交，随后通过隔离 Actions 生成并纳入版本控制。
+- 测试只在隔离 GitHub Actions PostgreSQL 中执行，不代表已在真实企业运行环境演练。
 
-## 验收证据
+## 未完成与风险
 
-待 CI 执行后补充成功与失败记录。未执行项不得标为 PASS。
+- T03/T04 才会实现应用发布、管理员审核与市场浏览的正式 UI 和 Playwright E2E。
+- 下架、操作权限审计、真实图标上传、应用分类管理不在本轮范围。
+- 公开指针当前由领域事务和公开读取 JOIN 约束，不是跨表复合外键；后续需要专门评审数据库级完整性保护方案。
+- 生产账号安全阻断项仍见 [Issue #5](https://github.com/NoName4Me/enterprise-app-marketplace/issues/5)。
+- 必须确认生产数据库迁移、数据库备份与环境隔离后才进行部署。

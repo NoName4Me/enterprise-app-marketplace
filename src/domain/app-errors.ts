@@ -15,7 +15,10 @@ export function httpErrorResponse(error: unknown): Response {
       { status: error.status, headers: { "Cache-Control": "no-store" } });
   }
   // Unknown errors must not leak SQL, stack traces or private fields to clients.
-  console.error("Unhandled application operation error:", error);
+  // Avoid logging SQL bound parameters (which can contain employee data).
+  console.error("Unhandled application operation error", {
+    category: error instanceof Error ? error.name : "unknown",
+  });
   return Response.json({ error: "internal_error" },
     { status: 500, headers: { "Cache-Control": "no-store" } });
 }
