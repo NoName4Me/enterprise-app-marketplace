@@ -62,7 +62,8 @@ test("real browser flow: account permissions → draft → rejection → approva
   const appId = managedUrl.split("/").at(-1)!;
   await expect(page.getByText(/审核中：本版本不可修改/)).toBeVisible();
   await page.goto(`/apps/${appId}`);
-  await expect(page.getByText(/404|This page could not be found/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "404" })).toBeVisible();
+  await page.goto("/my/apps");
   await logout(page);
 
   await login(page, adminEmail, adminPassword);
