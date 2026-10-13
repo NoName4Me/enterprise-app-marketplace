@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import type { AccountPermissions } from "@/lib/access";
 import { mayCreateApp, mayReviewApp } from "@/lib/access";
 import { SignOutButton } from "@/app/apps/sign-out-button";
+import { NavLinks } from "./nav-links";
+import { UiIcon } from "./ui-icon";
 
 export function SiteNav({
   user, title, children,
@@ -13,18 +15,25 @@ export function SiteNav({
 }) {
   return (
     <div className="shell">
-      <header className="site-header">
-        <Link className="brand" href="/apps">企业应用市场</Link>
-        <nav aria-label="主导航" className="site-links">
-          <Link href="/apps">发现应用</Link>
-          <Link href="/my/apps">我的应用</Link>
-          {mayReviewApp(user) && <Link href="/admin/reviews">应用审核</Link>}
-          {mayReviewApp(user) && <Link href="/admin/users">账号管理</Link>}
-        </nav>
-        <div className="signed-user"><span>{user.name}{mayCreateApp(user) ? " · 发布者" : ""}</span><SignOutButton /></div>
-      </header>
-      {title && <h1>{title}</h1>}
-      {children}
+      <aside className="site-sidebar">
+        <Link className="brand" href="/apps"><span className="brand-mark"><UiIcon name="boxes" /></span><span>企业应用市场</span></Link>
+        <div className="sidebar-navigation">
+          <p className="nav-caption">工作空间</p>
+          <NavLinks canReview={mayReviewApp(user)} />
+        </div>
+        <div className="signed-user">
+          <span className="user-avatar" aria-hidden="true">{user.name.slice(0, 1)}</span>
+          <div className="user-identity"><strong>{user.name}</strong><span>{mayReviewApp(user) ? "管理员" : mayCreateApp(user) ? "应用发布者" : "员工"}</span></div>
+          <SignOutButton />
+        </div>
+      </aside>
+      <div className="workspace">
+        <header className="site-header"><span>工作空间 <span className="breadcrumb-divider">/</span> {title || "应用市场"}</span><span className="workspace-label">企业内部 · Web 应用</span></header>
+        <main className="workspace-content" id="main-content">
+          {title && <div className="page-heading"><p className="eyebrow">工作空间</p><h1>{title}</h1></div>}
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

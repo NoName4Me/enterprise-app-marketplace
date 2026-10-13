@@ -56,32 +56,36 @@ export function UserManagement({ users }: { users: ListedUser[] }) {
     finally { setWorking(false); }
   }
 
-  return <div className="card">
+  return <div className="user-management">
+    <section className="card">
     <h2>创建员工</h2>
-    <form onSubmit={create}>
+    <form className="user-create-form" onSubmit={create}>
       <label>姓名<input value={name} onChange={e => setName(e.target.value)} required /></label>
       <label>邮箱<input type="email" value={email} onChange={e => setEmail(e.target.value)} required /></label>
       <label>初始密码<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength={12} required /></label>
       <button type="submit" disabled={working}>创建账号</button>
     </form>
     {message && <p role="status">{message}</p>}
+    </section>
+    <section className="card">
     <h2>已开通员工（前 100 条）</h2>
-    <ul>
-      {users.map(u => <li key={u.id}>
-        {u.name} ({u.email}) · {u.banned ? "停用" : (u.role ?? "user")}
-        {" — "}创建权：{u.canCreateApp ? "有" : "无"}
-        {" "}
-        <button type="button" disabled={working || Boolean(u.banned)}
+    <ul className="employee-list">
+      {users.map(u => <li className="employee-row" key={u.id}>
+        <div className="employee-info"><strong>{u.name}</strong><span>{u.email} · {u.banned ? "停用" : (u.role ?? "user")}</span>
+        <span>创建权：{u.canCreateApp ? "有" : "无"}</span></div>
+        <div className="employee-actions">
+        <button className="button-secondary" type="button" disabled={working || Boolean(u.banned)}
           onClick={() => setCreatePermission(u.id, !u.canCreateApp)}>
           {u.canCreateApp ? "撤销创建权" : "授予创建权"}
         </button>
-        {" "}
         {!(u.role ?? "user").split(",").includes("admin") && (
-          <button type="button" disabled={working} onClick={() => setBanned(u.id, !u.banned)}>
+          <button className={u.banned ? "button-secondary" : "button-danger"} type="button" disabled={working} onClick={() => setBanned(u.id, !u.banned)}>
             {u.banned ? "恢复账号" : "停用账号"}
           </button>
         )}
+        </div>
       </li>)}
     </ul>
+    </section>
   </div>;
 }

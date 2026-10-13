@@ -1,6 +1,6 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { applications, appRevisions, reviewEvents } from "@/db/schema";
+import { applications, appRevisions, reviewEvents, appFavorites, appFeedback } from "@/db/schema";
 import { authorizeActor, type Actor } from "./actor";
 import { AppError } from "./app-errors";
 import { validateContent, type AppContent } from "./app-validation";
@@ -219,8 +219,9 @@ export async function reviewRevision(
 }
 
 /** Public catalog has one data source: the currently approved published pointer. */
-export async function listPublished(actor: Actor | null, term = "") {
-  await authorizeActor(actor, "active");
+export type CatalogOptions = { category?: string; sort?: string; saved?: boolean; page?: number; featured?: boolean };
+export async function listPublished(actor: Actor | null, term = "", options: CatalogOptions = {}) {
+  const current = await authorizeActor(actor, "active");
   if (term.length > 120) throw new AppError(422, "query_too_long");
   const filters = [
     eq(applications.listingStatus, "LISTED"),
@@ -230,11 +231,33 @@ export async function listPublished(actor: Actor | null, term = "") {
   ];
   if (term.trim()) {
     const literal = term.trim().replace(/[\\%_]/g, "\\$&");
-    filters.push(sql`${appRevisions.name} ILIKE ${"%" + literal + "%"} ESCAPE '\\'`);
+    filters.push(or(
+      sql`${appRevisions.name} ILIKE ${"%" + literal + "%"} ESCAPE '\\'`,
+      sql`${appRevisions.summary} ILIKE ${"%" + literal + "%"} ESCAPE '\\'`,
+    )!);
   }
-  return db.select(publicProjection()).from(applications)
+  if (options.category) {
+    if (!["office", "analytics", "development", "collaboration", "other"].includes(options.category)) throw new AppError(422, "invalid_category");
+    filters.push(eq(appRevisions.category, options.category));
+  }
+  const favorites = sql<number>`(SELECT count(*)::int FROM ${appFavorites} WHERE ${appFavorites.appId} = ${applications.id})`;
+  const rating = sql<number>`(SELECT coalesce(round(avg(${appFeedback.rating}), 1), 0)::float FROM ${appFeedback} WHERE ${appFeedback.appId} = ${applications.id} AND ${appFeedback.hidden} = false)`;
+  const saved = sql<boolean>`EXISTS (SELECT 1 FROM ${appFavorites} WHERE ${appFavorites.appId} = ${applications.id} AND ${appFavorites.userId} = ${current.id})`;
+  if (options.saved) filters.push(saved);
+  if (options.featured) filters.push(eq(applications.featured, true));
+  const sort = options.sort ?? "latest";
+  if (!["latest", "popular", "rating", "recommended"].includes(sort)) throw new AppError(422, "invalid_sort");
+  const page = options.page ?? 1;
+  if (!Number.isInteger(page) || page < 1 || page > 10000) throw new AppError(422, "invalid_page");
+  return db.select({ ...publicProjection(), featured: applications.featured,
+    favorites, rating, saved, publishedAt: appRevisions.reviewedAt,
+    ratingCount: sql<number>`(SELECT count(*)::int FROM ${appFeedback} WHERE ${appFeedback.appId} = ${applications.id} AND ${appFeedback.hidden} = false)`,
+  }).from(applications)
     .innerJoin(appRevisions, eq(appRevisions.id, applications.publishedRevisionId))
-    .where(and(...filters)).orderBy(desc(applications.updatedAt)).limit(50);
+    .where(and(...filters)).orderBy(
+      ...(sort === "popular" ? [desc(favorites)] : sort === "rating" ? [desc(rating)] : sort === "recommended" ? [desc(applications.featured)] : []),
+      desc(appRevisions.reviewedAt), applications.id,
+    ).limit(24).offset((page - 1) * 24);
 }
 
 export async function getPublished(actor: Actor | null, appId: string) {

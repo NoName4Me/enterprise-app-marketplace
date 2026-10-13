@@ -77,6 +77,7 @@ export const applications = pgTable("applications", {
   ownerUserId: text("owner_user_id").notNull().references(() => user.id),
   listingStatus: text("listing_status", { enum: ["UNLISTED", "LISTED"] }).notNull().default("UNLISTED"),
   publishedRevisionId: uuid("published_revision_id"),
+  featured: boolean("featured").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
@@ -123,3 +124,40 @@ export const reviewEvents = pgTable("review_events", {
   unique("review_event_revision_action_unique").on(t.revisionId, t.action),
   index("review_events_app_idx").on(t.appId),
 ]);
+
+export const appFavorites = pgTable("app_favorites", {
+  appId: uuid("app_id").notNull().references(() => applications.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [unique("app_favorite_user_unique").on(t.appId, t.userId), index("app_favorites_user_idx").on(t.userId)]);
+
+export const appFeedback = pgTable("app_feedback", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  appId: uuid("app_id").notNull().references(() => applications.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  rating: integer("rating").notNull(),
+  body: text("body").notNull().default(""),
+  ownerReply: text("owner_reply"),
+  hidden: boolean("hidden").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [unique("app_feedback_user_unique").on(t.appId, t.userId), check("app_feedback_rating_check", sql`${t.rating} BETWEEN 1 AND 5`), index("app_feedback_app_idx").on(t.appId)]);
+
+export const appDiscussions = pgTable("app_discussions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  appId: uuid("app_id").notNull().references(() => applications.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  parentId: uuid("parent_id"),
+  body: text("body").notNull(),
+  hidden: boolean("hidden").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [index("app_discussions_app_idx").on(t.appId), index("app_discussions_parent_idx").on(t.parentId)]);
+
+export const catalogEvents = pgTable("catalog_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  appId: uuid("app_id").notNull().references(() => applications.id, { onDelete: "cascade" }),
+  actorUserId: text("actor_user_id").notNull().references(() => user.id),
+  action: text("action").notNull(),
+  reason: text("reason"),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [index("catalog_events_app_idx").on(t.appId)]);

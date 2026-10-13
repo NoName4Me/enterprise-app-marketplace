@@ -39,7 +39,7 @@ export default async function ManagedApplication({
       {data.revisions.map(revision => <section key={revision.id} className="card">
         <div className="actions">
           <strong>第 {revision.sequence} 版：{revision.name || "未命名应用"}</strong>
-          <span className="tag">{statusName(revision.status)}</span>
+          <span className={`tag status-${revision.status.toLowerCase()}`}>{statusName(revision.status)}</span>
         </div>
         <p>{revision.summary || "无简介"} · {categoryNames[revision.category] ?? revision.category}</p>
         {revision.targetUrl && <p className="muted">登记地址：{revision.targetUrl}</p>}

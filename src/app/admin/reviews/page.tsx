@@ -21,7 +21,7 @@ export default async function ReviewQueue() {
           <h2>{item.name}</h2>
           <p>{item.summary}</p>
           <div className="actions">
-            <span className="tag">第 {item.sequence} 版 · 待审核</span>
+            <span className="tag status-pending">第 {item.sequence} 版 · 待审核</span>
             <span className="muted">提交时间：{item.submittedAt?.toLocaleString("zh-CN") ?? "未知"}</span>
           </div>
         </Link>)}

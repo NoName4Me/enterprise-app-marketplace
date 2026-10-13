@@ -10,6 +10,9 @@ export function statusName(status: string) {
 }
 
 const knownErrors: Record<string, string> = {
+  invalid_text: "请填写内容，并控制在允许的字数范围内。",
+  invalid_rating: "请选择 1–5 星评分。",
+  feedback_moderated: "该评价已由管理员隐藏，暂时不能重新发布。",
   unauthorized: "请先登录，或重新登录后操作。",
   forbidden: "没有执行此操作的权限。",
   not_found: "没有找到该内容，或你无权查看。",
