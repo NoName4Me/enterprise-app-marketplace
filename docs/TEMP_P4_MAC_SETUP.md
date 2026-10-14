@@ -36,10 +36,10 @@
 
 本机访问 Argo CD（单独终端保持端口转发）：
 
-    kubectl -n argocd port-forward svc/argocd-server 8088:443
     argocd admin initial-password -n argocd
+    # API/界面本机访问按第 9 节配置 HTTP + loopback 端口转发（避免自签名证书问题）
 
-浏览 https://localhost:8088 。门户使用只读专用 Argo CD token；不要把管理员密码提交到 GitHub，也不要关闭 Node 的 TLS 证书校验。
+完成第 9 节后浏览 http://127.0.0.1:8088 。门户使用只读专用 Argo CD token；不要把管理员密码提交到 GitHub，也不要关闭 Node 的 TLS 证书校验。
 
 ## 3. 在门户里绑定实验应用
 
