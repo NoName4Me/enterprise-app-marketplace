@@ -148,3 +148,9 @@ Loki 使用单体、短期保留和本地文件存储，非高可用。Grafana L
 ## 11. 生效版本判定
 
 Argo CD 的 desiredRevision 和 history.revision 表示 **GitOps 声明/同步历史**，不能直接当成 active 流量版本。P4 Lab ServiceMonitor 抓取 Rollouts active Service 的 /metrics 中 marketplace_lab_info{revision=...}；门户会在这个时间序列**恰好只有一条**时显示其观测 SHA。多条或无样本则显示未知，绝不据此声称发布完成。正式验收仍需用入口 /version 直接核对。
+
+## 12. 从门户通过 Argo CD 内置动作切流
+
+Argo CD 内建 Rollout 资源动作 promote-full、abort；门户测试环境内的“确认切流”/“中止发布”按钮调用官方 Argo CD API，不自己修改 Service selector。需另建 **ARGOCD_ACTION_TOKEN**，不要复用只读 Token。RBAC 仅允许 marketplace-lab/* 的 applications,get 与对应 action/argoproj.io/Rollout/promote-full、action/argoproj.io/Rollout/abort，禁止笼统允许 action/*。操作人还需在 P4_DEPLOY_OPERATOR_IDS 内、为应用 owner、存在 Argo app/environment UUID 的匹配绑定。
+
+本 API 接受 action 请求不是实际生效结果。按钮操作后须重新读取门户运行状态，并用 curl http://lab.k8s.orb.local/version 核查 active 代码版本；生产动作不开放。官方参考：https://argo-cd.readthedocs.io/en/latest/operator-manual/resource_actions/ 。

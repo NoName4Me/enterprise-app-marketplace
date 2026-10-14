@@ -25,6 +25,26 @@ export function P4ReleasePanel({ root }: { root: string }) {
     } catch (e) { setError(e instanceof Error ? e.message : "派发失败。"); }
     finally { setBusy(false); }
   }
+  async function rollout(action: "promote-full" | "abort") {
+    if (busy || !window.confirm(action === "promote-full"
+      ? "确认在测试环境执行 Argo Rollouts 全量切流？请先核查 preview 与健康状态。"
+      : "确认中止当前实验 Rollout 的发布进度？")) return;
+    setBusy(true); setMessage(""); setError("");
+    try {
+      const response = await fetch(root + "/devops/rollout", {
+        method: "POST", headers: { "content-type": "application/json" },
+        cache: "no-store", body: JSON.stringify({ action }),
+      });
+      const result = await response.json() as { note?: string; error?: string };
+      if (!response.ok) throw new Error(
+        result.error === "p4_operator_required" ? "当前账号没有实验发布操作权限。"
+        : result.error === "p4_application_not_bound" ? "应用与 Argo 测试环境未正确关联。"
+        : result.error === "p4_rollout_not_ready" ? "Argo 未同步或健康状态不足以切流，操作已拒绝。"
+        : "Argo 操作失败；请检查独立动作令牌以及 Rollout 状态。");
+      setMessage(result.note ?? "Argo 已接受操作请求，请重新读取运行状态。");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "操作失败。"); }
+    finally { setBusy(false); }
+  }
   return <section className="card asset-group" aria-label="P4实验GitOps发布">
     <h3>发布到测试环境 · GitOps PR</h3>
     <p className="muted">输入可信 GHCR 发布 Run ID，GitHub Actions 将验证来源并创建 GitOps 镜像 Digest PR。门户不会直接访问 Kubernetes。</p>
@@ -45,9 +65,17 @@ export function P4ReleasePanel({ root }: { root: string }) {
         <a href="https://github.com/NoName4Me/enterprise-app-marketplace/actions/workflows/p4-gitops-promote.yml"
            target="_blank" rel="noopener noreferrer">查看发布工作流</a>
       </div>
+      <div className="actions">
+        <button className="button-secondary" type="button" disabled={busy} onClick={() => void rollout("promote-full")}>
+          Argo 确认切流
+        </button>
+        <button className="button-secondary" type="button" disabled={busy} onClick={() => void rollout("abort")}>
+          Argo 中止当前发布
+        </button>
+      </div>
       {message && <p className="notice" role="status">{message}</p>}
       {error && <p className="error" role="alert">{error}</p>}
-      <p className="muted">仅测试环境、仅受授权的 owner 与 P4 操作者可发起。PR 合并、Argo 同步和人工蓝绿 promote 是后续独立步骤。</p>
+      <p className="muted">仅测试环境、仅受授权的 owner 与 P4 操作者可发起。PR 合并、Argo 同步和人工确认切流是独立步骤。切流/中止均使用 Argo CD 内置资源动作。</p>
     </div>
   </section>;
 }
