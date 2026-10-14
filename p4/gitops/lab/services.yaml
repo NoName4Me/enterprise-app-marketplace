@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: marketplace-lab-active
   namespace: marketplace-lab
+  labels:
+    app.kubernetes.io/name: marketplace-lab-active
 spec:
   selector:
     app: marketplace-lab

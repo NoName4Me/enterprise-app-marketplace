@@ -62,6 +62,7 @@ function isoEpoch(value: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 const metricQueries = [
+  { name: "active_lab_health", query: (ns: string) => 'min(marketplace_lab_health{namespace="' + ns + '"})' },
   { name: "namespace_ready_pods", query: (ns: string) => 'sum(kube_pod_status_ready{namespace="' + ns + '",condition="true"})' },
   { name: "namespace_container_restarts", query: (ns: string) => 'sum(kube_pod_container_status_restarts_total{namespace="' + ns + '"})' },
 ];

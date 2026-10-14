@@ -86,6 +86,8 @@ Rollouts 的 active Service 控制流量，autoPromotionEnabled=false 表示需�
     helm upgrade --install loki grafana-community/loki -n monitoring -f p4/observability/loki-values.yaml
     helm upgrade --install alloy grafana/alloy -n monitoring -f p4/observability/alloy-values.yaml
     kubectl -n monitoring get pods
+    kubectl apply -f p4/observability/lab-service-monitor.yaml
+    kubectl -n monitoring get servicemonitor marketplace-lab
 
 Loki 使用单体、短期保留和本地文件存储，非高可用。Grafana Loki 官方说明：https://grafana.com/docs/loki/latest/setup/install/helm/install-monolithic/ 。社区 Helm chart 可能变化；若报 values/schema 错误，先用 helm show values 核对，不要强制删除现有 PVC。
 
@@ -130,3 +132,15 @@ Loki 使用单体、短期保留和本地文件存储，非高可用。Grafana L
 门户配置 ARGOCD_SERVER_URL=http://127.0.0.1:8088，使用只读专用 Token。若门户在 Docker 内，请配置对应的明确可达入口而不是容器 localhost；不要禁用 TLS 验证。
 
 发布操作入口另外需要 P4_DEPLOY_OPERATOR_IDS（当前用户 ID 白名单）和 P4_GITHUB_DISPATCH_TOKEN（仅限仓库 Actions workflow dispatch 的服务端 GitHub Token）。操作者仍需拥有该应用的创建权限、应用 owner 身份，且应用有 TEST 环境。触发仅表示 GitHub 接受请求，不等于成功发布。
+
+## 10. AI 诊断的可观测性证据
+
+样例应用增加 /metrics（Prometheus exposition）、/health、/version 和结构化健康日志。ServiceMonitor 只抓取 active Service 的流量后端；配合单机 Kubernetes 的 kube-state-metrics、Alloy→Loki，可以在门户看到 active 实例健康、namespace Pod 就绪/重启次数以及最近日志。如果 Prometheus 的监控标签/CRD 未正确启用，页面显示 UNKNOWN，而不会伪装数据。
+
+首次配置 Argo CD 只读 API Token 时，请先创建单独账号并在新安装的 Argo CD 上设置只读 RBAC（避免使用 admin token）。例如：
+
+    kubectl -n argocd patch cm argocd-cm --type merge -p \'{"data":{"accounts.portal":"apiKey"}}\'
+
+再为账号 portal 配置 marketplace-lab/* 范围的 applications,get RBAC，并使用 argocd account generate-token --account portal 获取 Token。不要覆盖已有的 argocd-rbac-cm.policy.csv；应追加一条角色策略和账号映射。查询失败通常是 Token 权限不足、服务端无法连通或 Argo Application 标签/Project 映射不一致。
+
+目前 AI 只读诊断要求本机 Ollama（/api/chat 协议）及 AIOPS_MODEL。未安装模型时按钮显示 NOT_CONNECTED；模型分析只是建议，不能当成已完成自动修复。

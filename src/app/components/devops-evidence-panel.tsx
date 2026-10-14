@@ -6,6 +6,7 @@ import type { Diagnosis } from "@/domain/devops-diagnosis";
 
 function when(value: string | null): string { return value ? new Date(value).toLocaleString("zh-CN") : "未提供"; }
 const metricLabels: Record<string, string> = {
+  active_lab_health: "当前 active 流量后端健康指标（1=健康，0=故障）",
   namespace_ready_pods: "就绪 Pod 数（专用实验命名空间）",
   namespace_container_restarts: "容器累计重启次数（专用实验命名空间）",
 };
