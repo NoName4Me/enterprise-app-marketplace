@@ -6,6 +6,7 @@ import type { ArgoOverview } from "./argocd-model";
 export type SignalState = "OK" | "NOT_CONNECTED" | "UNKNOWN";
 export type ObservedMetric = { name: string; value: number; sampledAt: string | null; revision?: string };
 export type LogEntry = { at: string | null; line: string };
+export type AlertEntry = { name: string; severity: string; state: string; activeAt: string | null; summary: string };
 export type Signal<T> = {
   source: string;
   state: SignalState;
@@ -20,6 +21,7 @@ export type DevopsEvidence = {
   github: Awaited<ReturnType<typeof getGithubOverview>>;
   metrics: Signal<ObservedMetric>;
   logs: Signal<LogEntry>;
+  alerts: Signal<AlertEntry>;
   scopeNote: string;
 };
 
@@ -79,6 +81,10 @@ export async function collectDevopsEvidence(actor: Actor | null, appId: string, 
     source: "Prometheus query API", state: prom ? "UNKNOWN" : "NOT_CONNECTED",
     observedAt: collectedAt, items: [], scope: null,
   };
+  const emptyAlerts: Signal<AlertEntry> = {
+    source: "Prometheus alerts API", state: prom ? "UNKNOWN" : "NOT_CONNECTED",
+    observedAt: collectedAt, items: [], scope: null,
+  };
   const emptyLogs: Signal<LogEntry> = {
     source: "Loki query_range API", state: loki ? "UNKNOWN" : "NOT_CONNECTED",
     observedAt: collectedAt, items: [], scope: null,
@@ -92,11 +98,12 @@ export async function collectDevopsEvidence(actor: Actor | null, appId: string, 
   const ns = matching.length === 1 ? matching[0].namespace : null;
   if (!ns) return {
     source: "P4 read-only external evidence", collectedAt, argo, github,
-    metrics: emptyMetrics, logs: emptyLogs,
+    metrics: emptyMetrics, logs: emptyLogs, alerts: emptyAlerts,
     scopeNote: "没有恰好一条映射到专用实验命名空间的 Argo 应用，跳过命名空间聚合指标和日志，避免混入其他应用。",
   };
   const metrics: Signal<ObservedMetric> = { ...emptyMetrics, scope: ns };
   const logs: Signal<LogEntry> = { ...emptyLogs, scope: ns };
+  const alerts: Signal<AlertEntry> = { ...emptyAlerts, scope: ns };
   await Promise.all([
     (async () => {
       if (!prom) return;
@@ -119,6 +126,26 @@ export async function collectDevopsEvidence(actor: Actor | null, appId: string, 
         metrics.items = items;
         metrics.state = items.length ? "OK" : "UNKNOWN";
       } catch { metrics.state = "UNKNOWN"; }
+    })(),
+    (async () => {
+      if (!prom) return;
+      try {
+        const payload = obj(await readJson(prom, "/api/v1/alerts", {}));
+        if (payload.status !== "success") throw new Error("bad_prometheus_alerts");
+        alerts.items = arr(obj(payload.data).alerts).filter(value =>
+          obj(obj(value).labels).namespace === ns).slice(0, 16).map(value => {
+          const row = obj(value), labels = obj(row.labels), annotations = obj(row.annotations);
+          const activeAt = typeof row.activeAt === "string" && !Number.isNaN(Date.parse(row.activeAt)) ? row.activeAt : null;
+          return {
+            name: String(labels.alertname ?? "unknown").slice(0, 100),
+            severity: String(labels.severity ?? "unknown").slice(0, 30),
+            state: String(row.state ?? "unknown").slice(0, 20),
+            activeAt,
+            summary: String(annotations.summary ?? "").slice(0, 300),
+          };
+        });
+        alerts.state = "OK";
+      } catch { alerts.state = "UNKNOWN"; }
     })(),
     (async () => {
       if (!loki) return;
@@ -149,7 +176,7 @@ export async function collectDevopsEvidence(actor: Actor | null, appId: string, 
     })(),
   ]);
   return {
-    source: "P4 read-only external evidence", collectedAt, argo, github, metrics, logs,
+    source: "P4 read-only external evidence", collectedAt, argo, github, metrics, logs, alerts,
     scopeNote: "监控指标是独立实验命名空间聚合值；日志只取 lab 容器最近 15 分钟的有限样本。真实流量与业务恢复需另外验证。",
   };
 }

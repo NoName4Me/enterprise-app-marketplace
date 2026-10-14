@@ -72,6 +72,14 @@ export function DevopsEvidencePanel({ root }: { root: string }) {
         </p>)}
       </div>
       <div className="asset-row">
+        <strong>告警 · {data.alerts.source}（{data.alerts.state}）</strong>
+        {data.alerts.state === "OK" && !data.alerts.items.length && <p className="muted">该专用实验命名空间目前无活跃 Prometheus 告警。</p>}
+        {data.alerts.state !== "OK" && <p className="muted">无法读取告警；不能据此确认无故障。</p>}
+        {data.alerts.items.map((alert, index) => <p key={index} className="muted">
+          {alert.name} · {alert.severity} · {alert.state} · {alert.summary || "无摘要"} · {when(alert.activeAt)}
+        </p>)}
+      </div>
+      <div className="asset-row">
         <strong>最近日志 · {data.logs.source}（{data.logs.state}）</strong>
         {!data.logs.items.length && <p className="muted">未取得实验应用日志。</p>}
         {data.logs.items.slice(0, 10).map((entry, index) => <p key={index} className="muted pre-wrap">

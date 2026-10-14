@@ -34,6 +34,7 @@ function compactEvidence(evidence: DevopsEvidence) {
       runs: ref.runs.items.slice(0, 3).map(r => ({ status: r.status, conclusion: r.conclusion, at: r.at })),
     })),
     metrics: evidence.metrics,
+    alerts: evidence.alerts,
     logs: { state: evidence.logs.state, scope: evidence.logs.scope, lines: evidence.logs.items.slice(0, 12) },
     collectedAt: evidence.collectedAt,
   };
