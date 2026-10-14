@@ -2,7 +2,7 @@
 
 更新时间：2026-10-13。**P0–P8 为规划优先级，不代表已实现或强制逐项串行；一个阶段未满足验收不可虚报完成。**
 
-> 2026-10-14 执行补充：P0-T01 [PR #15](https://github.com/NoName4Me/enterprise-app-marketplace/pull/15) 全量 CI PASS；P0-T02 [PR #16](https://github.com/NoName4Me/enterprise-app-marketplace/pull/16) 安全代码通过，真实分支保护与失败合并负例已通过；LAB-T00/T01 已在 OrbStack 本机实测，GHCR/digest LAB-T02配置已生成，真实发布/部署待验证。见 [门禁证据](engineering/P0_T02.md) 与 [本机证据](engineering/LAB_T01.md)。下文“最新 CI 失败”为10月13日规划时观察值。
+> 2026-10-14 执行补充：P0-T01 [PR #15](https://github.com/NoName4Me/enterprise-app-marketplace/pull/15) 全量 CI PASS；P0-T02 [PR #16](https://github.com/NoName4Me/enterprise-app-marketplace/pull/16) 安全代码通过，真实分支保护与失败合并负例已通过；LAB-T00/T01 已在 OrbStack 本机实测，GHCR/digest LAB-T02已真实发布、匿名拉取与OrbStack摘要部署/回滚，见[证据](engineering/LAB_T02.md)。见 [门禁证据](engineering/P0_T02.md) 与 [本机证据](engineering/LAB_T01.md)。下文“最新 CI 失败”为10月13日规划时观察值。
 
 ## 当前已具备的事实与限制
 

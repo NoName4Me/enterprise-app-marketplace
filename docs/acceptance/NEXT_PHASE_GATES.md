@@ -49,4 +49,4 @@
 - GATE-01/02/03 PASS：P0-T01 PR #15 最新提交全量 [CI](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38427220144)；P0-T02依赖修补后全量 [CI](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38428935965)。
 - GATE-04 PASS：分支保护API复核、标题检查失败时按钮禁用；[业务负例 PR #23](https://github.com/NoName4Me/enterprise-app-marketplace/pull/23) 的 validate 失败后真实合并请求 HTTP405 被拒绝，PR关闭未合并。详见[记录](../engineering/P0_T02.md)。
 - LAB-01 PASS：实际Mac M4/OrbStack，隔离数据库、门户和实验服务启动/持久化/故障恢复/停止，详见[本机证据](../engineering/LAB_T01.md)及对应PR最新SHA检查。
-- LAB-02/03/04 NOT RUN：GATE-04已通过，可信ARM64发布/本机部署配置已生成；真实GHCR发布、按摘要部署与回滚须在LAB-T02合并后执行并补证据，见[记录](../engineering/LAB_T02.md)。
+- LAB-02/03/04 PASS：[ARM64发布run](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38509341045) 成功，本机匿名按两个摘要拉取、健康部署、故障版503后恢复旧摘要200；首次HTTP验证误报已修复并复测。精确源SHA/digest、时间与未覆盖破坏场景见[记录](../engineering/LAB_T02.md)。

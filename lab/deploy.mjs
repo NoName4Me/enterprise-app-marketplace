@@ -5,6 +5,7 @@ import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
 import { verifyCI, verifyManifest, verifyPublication, verifyLocalTarget, REPOSITORY, IMAGE } from "./release-policy.mjs";
+import { verifyService } from "./verify-service.mjs";
 
 process.chdir(resolve(dirname(fileURLToPath(import.meta.url)), ".."));
 const [runID, variant] = process.argv.slice(2);
@@ -103,7 +104,5 @@ try {
   }
 }
 async function verifyResponse(revision, faultMode) {
-  const version = await (await fetch("http://127.0.0.1:3382/version", { signal: AbortSignal.timeout(5000) })).json();
-  const health = await fetch("http://127.0.0.1:3382/health", { signal: AbortSignal.timeout(5000) });
-  if (version.service !== "marketplace-lab" || version.environment !== "local-lab" || version.revision !== revision || version.faultMode !== faultMode || health.status !== 200) throw new Error("Actual service version/health mismatch.");
+  await verifyService("http://127.0.0.1:3382", revision, faultMode);
 }
