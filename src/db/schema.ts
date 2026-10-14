@@ -304,3 +304,36 @@ export const appAccessRequests = pgTable("app_access_requests", {
   check("access_request_no_self_decision", sql`${t.decidedBy} IS NULL OR ${t.decidedBy} <> ${t.requesterUserId}`),
   check("access_request_no_self_provision", sql`${t.provisionedBy} IS NULL OR ${t.provisionedBy} <> ${t.requesterUserId}`),
 ]);
+
+export const requirements = pgTable("requirements", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  appId: uuid("app_id").references(() => applications.id, { onDelete: "restrict" }),
+  createdBy: text("created_by").notNull().references(() => user.id, { onDelete: "restrict" }),
+  type: text("type", { enum: ["NEW_APP","FEATURE","BUG","IMPROVEMENT"] }).notNull(),
+  title: text("title").notNull(), description: text("description").notNull(),
+  status: text("status", { enum: ["OPEN","IN_PROGRESS","DONE","REJECTED"] }).default("OPEN").notNull(),
+  githubIssueUrl: text("github_issue_url"), githubPrUrl: text("github_pr_url"),
+  resolution: text("resolution"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [
+  index("requirements_app_idx").on(t.appId, t.createdAt),
+  index("requirements_author_idx").on(t.createdBy, t.createdAt),
+]);
+export const requirementComments = pgTable("requirement_comments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  requirementId: uuid("requirement_id").notNull().references(() => requirements.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "restrict" }),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [index("requirement_comments_idx").on(t.requirementId, t.createdAt)]);
+export const codingTasks = pgTable("coding_tasks", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  requirementId: uuid("requirement_id").notNull().references(() => requirements.id, { onDelete: "restrict" }),
+  createdBy: text("created_by").notNull().references(() => user.id, { onDelete: "restrict" }),
+  repository: text("repository").notNull(),
+  externalTaskId: text("external_task_id"),
+  state: text("state", { enum: ["REQUESTING","ACCEPTED","UNKNOWN"] }).default("REQUESTING").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [unique("coding_tasks_requirement_unique").on(t.requirementId)]);

@@ -57,6 +57,13 @@
       "when": 1791960000000,
       "tag": "0007_access_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791972000000,
+      "tag": "0008_requirements_coding_tasks",
+      "breakpoints": true
     }
   ]
 }
