@@ -14,7 +14,7 @@ function run(cmd, args) {
 function api(path) { return JSON.parse(run("gh", ["api", "repos/" + REPOSITORY + "/" + path])); }
 export function updateRollout(content, digest) {
   if (!/^sha256:[a-f0-9]{64}$/.test(digest)) throw new Error("Invalid immutable image digest.");
-  const pattern = /^(\s*image:\s*)ghcr\.io\/noname4me\/enterprise-app-marketplace-lab@sha256:[a-f0-9]{64}\s*$/gm;
+  const pattern = /^([ \t]*image:[ \t]*)ghcr\.io\/noname4me\/enterprise-app-marketplace-lab@sha256:[a-f0-9]{64}[ \t]*$/gm;
   if ([...content.matchAll(pattern)].length !== 1) throw new Error("Expected exactly one trusted lab image.");
   return content.replace(pattern, (_line, prefix) => prefix + IMAGE + "@" + digest);
 }

@@ -96,7 +96,7 @@ Loki 使用单体、短期保留和本地文件存储，非高可用。Grafana L
 
 ## 7. 门户环境变量（只配服务端）
 
-    ARGOCD_SERVER_URL=https://localhost:8088
+    ARGOCD_SERVER_URL=http://127.0.0.1:8088
     ARGOCD_READ_TOKEN=<只读令牌>
     ARGOCD_ALLOWED_PROJECTS=marketplace-lab
     PROMETHEUS_SERVER_URL=http://127.0.0.1:9090
@@ -117,3 +117,16 @@ Loki 使用单体、短期保留和本地文件存储，非高可用。Grafana L
 - [ ] AI 只读诊断给出证据，不执行写操作
 
 > 实机未运行时这些项都为 NOT RUN；不得说 P4 生产发布完成。
+
+## 9. 让本机 Argo CD API 可以被门户安全地读取
+
+本地 Port Forward 默认连接 Argo 的 HTTPS 自签名证书，会被 Node.js 正常拒绝。仅在**本机实验**将 Argo server 设置为明文 HTTP，然后只绑定 loopback 的端口转发（不要打开公网服务）：
+
+    kubectl -n argocd patch cm argocd-cmd-params-cm --type merge -p '{"data":{"server.insecure":"true"}}'
+    kubectl -n argocd rollout restart deployment/argocd-server
+    kubectl -n argocd rollout status deployment/argocd-server
+    kubectl -n argocd port-forward --address 127.0.0.1 svc/argocd-server 8088:80
+
+门户配置 ARGOCD_SERVER_URL=http://127.0.0.1:8088，使用只读专用 Token。若门户在 Docker 内，请配置对应的明确可达入口而不是容器 localhost；不要禁用 TLS 验证。
+
+发布操作入口另外需要 P4_DEPLOY_OPERATOR_IDS（当前用户 ID 白名单）和 P4_GITHUB_DISPATCH_TOKEN（仅限仓库 Actions workflow dispatch 的服务端 GitHub Token）。操作者仍需拥有该应用的创建权限、应用 owner 身份，且应用有 TEST 环境。触发仅表示 GitHub 接受请求，不等于成功发布。

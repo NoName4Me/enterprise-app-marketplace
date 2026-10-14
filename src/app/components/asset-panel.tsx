@@ -5,6 +5,7 @@ import { explainError, lifecycleName } from "@/lib/marketplace-labels";
 import { GithubLivePanel } from "./github-live-panel";
 import { ArgoCDLivePanel } from "./argocd-live-panel";
 import { DevopsEvidencePanel } from "./devops-evidence-panel";
+import { P4ReleasePanel } from "./p4-release-panel";
 
 type NamedAsset = { id: string; key: string; name: string; notes: string; archivedAt: string | null; purpose?: string };
 type Binding = { id: string; componentId: string; environmentId: string; archivedAt: string | null };
@@ -83,6 +84,7 @@ export function AssetPanel({ appId, initial, initialPreflight, initialEvents, ca
       </section>
       <GithubLivePanel key={data.assetVersion} root={root} registered={data.references.filter(ref => !ref.archivedAt).length} />
       <ArgoCDLivePanel key={data.assetVersion} root={root} registered={data.environments.filter(env => !env.archivedAt).length} />
+      {!admin && editable && <P4ReleasePanel root={root} />}
       <DevopsEvidencePanel root={root} />
     </section>
     <section id="lifecycle" className="card asset-group"><h2>生命周期与审计</h2><p>当前阶段：{lifecycleName(data.lifecycleStatus)}（人工登记）</p><p className="muted">生命周期独立于市场审核、运行健康和部署结果。变更不会部署或关停目标服务。</p><h3>退役检查</h3>{preflight.retirementBlockers.length ? <ul>{preflight.retirementBlockers.map(blocker => <li key={blocker}>{blockerNames[blocker] ?? blocker}</li>)}</ul> : <p>门户登记条件已满足；仍需人工核查外部影响。</p>}<p className="muted">外部依赖及运行影响：未知，未接入采集。执行时会重新核查条件。</p>

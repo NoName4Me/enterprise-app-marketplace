@@ -75,6 +75,7 @@ jobs:
         run: pnpm test:db
       - name: Fast required gate - typecheck lint build
         run: |
+          node --test scripts/p4-open-promotion.test.mjs
           pnpm typecheck
           pnpm lint
           pnpm build

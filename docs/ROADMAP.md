@@ -1,7 +1,7 @@
 # 功能优先路线图：从员工任务到真实交付
 
 > **当前优先级调整（2026-10-14）**：暂停 P3 需求中心及 AI 需求功能，优先 P4 开发→可信制品→GitOps 部署→观测→受控 AI 诊断。企业应用门户定位不变，AI DevOps 是应用的私有维护能力；基础设施复用 GitHub Actions/GHCR/k3s/Argo CD/Argo Rollouts/Prometheus/Loki，不自研容器调度、流量切换或 Code RAG。
-> **P4 首批代码**：新增 Argo CD Application 按应用/环境 UUID 关联的只读查询（Synced、Healthy、版本、镜像摘要）。需先完成 Mac 本机实验集群和 Argo 权限配置才能实测；不得将提交代码表述为部署闭环已打通。
+> **P4 已编码切片（待 Mac 实测）**：新增 GitOps Rollout/PR 工作流、发布派发入口、Prometheus/Loki 运维证据、Ollama 只读诊断，并实现 Argo CD Application 按应用/环境 UUID 关联的只读查询（Synced、Healthy、版本、镜像摘要）。需先完成 Mac 本机实验集群和 Argo 权限配置才能实测；不得将提交代码表述为部署闭环已打通。
 
 
 > 规划更新：2026-10-14。依据 [PRODUCT](PRODUCT.md)。**按用户闭环安排任务，不按模块数量衡量完成度**。本文件只维护主要优先级与下一条工作，实施细节/验证记录写 PR 和 CI，避免新建每任务 Markdown。
