@@ -1,6 +1,6 @@
 # P1-T01资产与生命周期验收用例
 
-日期：2026-10-14；对应[设计](../design/P1_ASSET_LIFECYCLE.md)。状态按验证层次记录，P1-A部分已本地实测；具体覆盖和NOT RUN见[交付记录](../engineering/P1_ASSET_DELIVERY.md)。A/B/C已实现并有实际分层验证，MIG-04运行回退演练仍NOT RUN，整体P1门槛尚未完全闭环。原用例表保留验收要求，不代表各层全部通过。
+日期：2026-10-14；对应[设计](../design/P1_ASSET_LIFECYCLE.md)。状态按验证层次记录，P1-A部分已本地实测；具体覆盖和NOT RUN见[交付记录](../engineering/P1_ASSET_DELIVERY.md)。A/B/C已实现并有实际分层验证，MIG-04受限只读回退已验证，完整可写历史版本回退仍NOT RUN，整体P1门槛尚未完全闭环。原用例表保留验收要求，不代表各层全部通过。
 
 ## 1. 测试夹具与执行层次
 
