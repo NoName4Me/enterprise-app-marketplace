@@ -71,6 +71,44 @@ test("three independent users: permissions, rejected revision, publish, search, 
     const appId = managedUrl.split("/").at(-1)!;
     await expect(creator.getByText(/审核中：本版本不可修改/)).toBeVisible();
 
+    // P1-A: use real browser session cookies against HTTP routes while pending.
+    const assetUrl = `/api/my/apps/${appId}/assets`;
+    const initialAssets = await creator.request.get(assetUrl);
+    expect(initialAssets.headers()["cache-control"]).toBe("private, no-store");
+    expect((await initialAssets.json()).assetVersion).toBe(1);
+    const headers = { origin: new URL(managedUrl).origin };
+    const componentResponse = await creator.request.post(assetUrl + "/components", {
+      headers, data: { expectedVersion: 1, key: "portal", name: "门户组件", notes: "仅负责人可见" },
+    });
+    expect(componentResponse.status()).toBe(201);
+    const component = (await componentResponse.json()).resource;
+    const environmentResponse = await creator.request.post(assetUrl + "/environments", {
+      headers, data: { expectedVersion: 2, key: "test", name: "测试环境", purpose: "TEST" },
+    });
+    expect(environmentResponse.status()).toBe(201);
+    const environment = (await environmentResponse.json()).resource;
+    const bindingResponse = await creator.request.post(assetUrl + "/bindings", {
+      headers, data: { expectedVersion: 3, componentId: component.id, environmentId: environment.id },
+    });
+    expect(bindingResponse.status()).toBe(201);
+    const binding = (await bindingResponse.json()).resource;
+    const referenceResponse = await creator.request.post(assetUrl + "/references", {
+      headers, data: { expectedVersion: 4, componentId: component.id, bindingId: binding.id, resourceKind: "WORKFLOW", repositoryFullName: "Example/Portal", workflowId: "12345" },
+    });
+    expect(referenceResponse.status()).toBe(201);
+    const registeredAssets = await (await creator.request.get(assetUrl)).json();
+    expect(registeredAssets.references[0]).toMatchObject({ connectionStatus: "NOT_VERIFIED", lastCollectedAt: null });
+    expect(registeredAssets.healthStatus).toBe("NOT_CONNECTED");
+    expect((await reader.request.get(assetUrl)).status()).toBe(404);
+    const governance = await admin.request.get(`/api/admin/apps/${appId}/assets`);
+    expect(governance.status()).toBe(200);
+    expect((await governance.json()).components).toHaveLength(1);
+    expect((await admin.request.patch(assetUrl + `/components/${component.id}`, { headers, data: { expectedVersion: 5, name: "越权修改" } })).status()).toBe(404);
+    const stale = await creator.request.patch(assetUrl + `/components/${component.id}`, { headers, data: { expectedVersion: 1, name: "过期覆盖" } });
+    expect(stale.status()).toBe(409);
+    expect((await creator.request.get(`/api/my/apps/${appId}/asset-events`)).status()).toBe(200);
+    expect((await reader.request.get(`/api/my/apps/${appId}/asset-events`)).status()).toBe(404);
+
     await reader.goto(`/apps/${appId}`);
     await expect(reader.getByRole("heading", { name: "404" })).toBeVisible();
     await admin.goto("/admin/reviews");
