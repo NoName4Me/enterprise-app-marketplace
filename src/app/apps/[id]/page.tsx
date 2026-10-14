@@ -10,6 +10,7 @@ import { getCommunity } from "@/domain/community-service";
 import { CommunityPanel } from "./community-panel";
 import { RequestAccessPanel } from "./request-access-panel";
 import { myAppAccessRequest } from "@/domain/access-request-service";
+import Link from "next/link";
 import { FavoriteButton } from "@/app/components/favorite-button";
 import { AppIcon } from "@/app/components/app-icon";
 
@@ -46,6 +47,7 @@ export default async function AppDetail({ params }: { params: Promise<{ id: stri
       <h2>应用介绍</h2>
       <p className="pre-wrap">{app.description || "发布者尚未填写详细介绍。"}</p>
     </section>
+    <section className="card"><p><Link href={"/requirements?appId="+app.id}>为这个应用提交功能或缺陷需求 →</Link></p></section>
     <RequestAccessPanel appId={app.id} initial={myRequest} />
     <CommunityPanel appId={app.id} data={community} />
   </SiteNav>;

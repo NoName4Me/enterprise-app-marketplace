@@ -10,6 +10,7 @@ export function NavLinks({ canReview }: { canReview: boolean }) {
     { href: "/apps", label: "发现应用", icon: "compass" as const },
     { href: "/my/apps", label: "我的应用", icon: "layers" as const },
     { href: "/requests", label: "申请与待办", icon: "users" as const },
+    { href: "/requirements", label: "需求中心", icon: "layers" as const },
     { href: "/favorites", label: "我的收藏", icon: "bookmark" as const },
     { href: "/discover", label: "场景找应用", icon: "sparkles" as const },
     { href: "/account/security", label: "账号安全", icon: "shield" as const },
