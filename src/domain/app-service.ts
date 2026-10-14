@@ -46,7 +46,7 @@ export async function createApplication(actor: Actor | null, fields: Record<stri
 export async function listOwnedApplications(actor: Actor | null) {
   const owner = await authorizeActor(actor, "active");
   const apps = await db.select({
-    id: applications.id, listingStatus: applications.listingStatus,
+    id: applications.id, lifecycleStatus: applications.lifecycleStatus, listingStatus: applications.listingStatus,
     publishedRevisionId: applications.publishedRevisionId,
   }).from(applications).where(eq(applications.ownerUserId, owner.id))
     .orderBy(desc(applications.createdAt)).limit(50);
@@ -76,7 +76,7 @@ export async function getOwnedApplication(actor: Actor | null, appId: string) {
   if (!app) throw new AppError(404, "not_found");
   const revisions = await db.select().from(appRevisions)
     .where(eq(appRevisions.appId, app.id)).orderBy(desc(appRevisions.sequence));
-  return { id: app.id, listingStatus: app.listingStatus,
+  return { id: app.id, lifecycleStatus: app.lifecycleStatus, listingStatus: app.listingStatus,
     publishedRevisionId: app.publishedRevisionId,
     revisions: revisions.map((r) => ({
       id: r.id, sequence: r.sequence, status: r.status, ...contentFromRevision(r),

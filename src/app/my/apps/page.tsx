@@ -5,7 +5,7 @@ import { SiteNav } from "@/app/components/site-nav";
 import { listOwnedApplications } from "@/domain/app-service";
 import { getPageUser } from "@/lib/page-user";
 import { mayCreateApp } from "@/lib/access";
-import { statusName } from "@/lib/marketplace-labels";
+import { lifecycleName, statusName } from "@/lib/marketplace-labels";
 
 export const dynamic = "force-dynamic";
 export default async function MyApps() {
@@ -23,6 +23,7 @@ export default async function MyApps() {
         {apps.map(app => <Link key={app.id} href={`/my/apps/${app.id}`} className="card app-card">
           <h2>{app.latestName}</h2>
           <span className={`tag status-${app.latestStatus.toLowerCase()}`}>{statusName(app.latestStatus)}</span>
+          <p>生命周期：{lifecycleName(app.lifecycleStatus)}</p>
           <p>{app.listingStatus === "LISTED" ? "市场已上架" : "市场未上架"} · 申请版本 #{app.sequence}</p>
         </Link>)}
       </div>}

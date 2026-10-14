@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, or, sql, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { applications, appComponents, appEnvironments, componentEnvironments, externalReferences, assetEvents, user } from "@/db/schema";
+import { applications, appComponents, appEnvironments, componentEnvironments, externalReferences, assetEvents, user, appRevisions } from "@/db/schema";
 import { authorizeActor, type Actor } from "./actor";
 import { AppError } from "./app-errors";
 import { assetId, expectedVersion, validateAssetCreate, validateAssetPatch, validateTeamPatch, type AssetResource } from "./asset-validation";
@@ -29,11 +29,13 @@ export async function getAssets(actor: Actor | null, appId: string, admin = fals
   // Root SHARE prevents asset writers from changing any child until aggregate read ends.
   return db.transaction(async tx => {
     const app = await privateApp(tx, actor, appId, admin);
+    const [owner] = await tx.select({ id: user.id, name: user.name }).from(user).where(eq(user.id, app.ownerUserId));
+    const [latest] = await tx.select({ name: appRevisions.name }).from(appRevisions).where(eq(appRevisions.appId, appId)).orderBy(desc(appRevisions.sequence)).limit(1);
     const components = await tx.select().from(appComponents).where(eq(appComponents.appId, appId)).orderBy(asc(appComponents.key));
     const environments = await tx.select().from(appEnvironments).where(eq(appEnvironments.appId, appId)).orderBy(asc(appEnvironments.key));
     const bindings = await tx.select().from(componentEnvironments).where(eq(componentEnvironments.appId, appId)).orderBy(asc(componentEnvironments.id));
     const references = await tx.select().from(externalReferences).where(eq(externalReferences.appId, appId)).orderBy(asc(externalReferences.id));
-    return { id: appId, assetVersion: app.assetVersion, lifecycleStatus: app.lifecycleStatus, responsibleTeamName: app.responsibleTeamName, components, environments, bindings,
+    return { id: appId, name: latest?.name || "未命名应用", owner, assetVersion: app.assetVersion, lifecycleStatus: app.lifecycleStatus, responsibleTeamName: app.responsibleTeamName, components, environments, bindings,
       references: references.map(reference => ({ ...reference, connectionStatus: "NOT_VERIFIED", lastCollectedAt: null,
         // A workflow numeric ID is an API object identity, not a workflow filename.
         url: `https://github.com/${reference.repositoryFullName}${reference.resourceKind === "WORKFLOW" ? "/actions" : ""}`,
@@ -46,7 +48,7 @@ export async function getAssetEvents(actor: Actor | null, appId: string, admin =
   if (beforeVersion !== undefined && (!Number.isInteger(beforeVersion) || beforeVersion < 1)) throw new AppError(422, "invalid_cursor");
   return db.transaction(async tx => {
     await privateApp(tx, actor, appId, admin);
-    const items = await tx.select().from(assetEvents).where(and(eq(assetEvents.appId, appId), beforeVersion === undefined ? undefined : sql`${assetEvents.assetVersionAfter} < ${beforeVersion}`))
+    const items = await tx.select({ id: assetEvents.id, appId: assetEvents.appId, actorUserId: assetEvents.actorUserId, actorName: user.name, action: assetEvents.action, resourceType: assetEvents.resourceType, resourceId: assetEvents.resourceId, beforeState: assetEvents.beforeState, afterState: assetEvents.afterState, reason: assetEvents.reason, assetVersionAfter: assetEvents.assetVersionAfter, occurredAt: assetEvents.occurredAt }).from(assetEvents).innerJoin(user, eq(user.id, assetEvents.actorUserId)).where(and(eq(assetEvents.appId, appId), beforeVersion === undefined ? undefined : sql`${assetEvents.assetVersionAfter} < ${beforeVersion}`))
       .orderBy(desc(assetEvents.assetVersionAfter)).limit(50);
     return { items, nextBeforeVersion: items.length === 50 ? items[49].assetVersionAfter : null };
   });
@@ -159,4 +161,14 @@ export async function updateAsset(actor: Actor | null, appId: string, resource: 
     const [after] = await tx.update(table).set({ ...values, ...(archived === undefined ? {} : { archivedAt: archived ? new Date() : null }), updatedAt: new Date() }).where(eq(table.id, id)).returning();
     return { resourceType: resource, resourceId: id, action: archived === undefined ? "UPDATED" : archived ? "ARCHIVED" : "RESTORED", before: { ...auditState(before), changedFields: Object.keys(patch) }, after: { ...auditState(after), changedFields: Object.keys(patch) }, result: after };
   });
+}
+
+export async function listGovernedApplications(actor: Actor | null) {
+  await authorizeActor(actor, "review");
+  const apps = await db.select({ id: applications.id, listingStatus: applications.listingStatus, lifecycleStatus: applications.lifecycleStatus, ownerName: user.name }).from(applications).innerJoin(user, eq(user.id, applications.ownerUserId)).orderBy(desc(applications.updatedAt)).limit(100);
+  if (!apps.length) return [];
+  const revisions = await db.select({ appId: appRevisions.appId, name: appRevisions.name, status: appRevisions.status }).from(appRevisions).where(inArray(appRevisions.appId, apps.map(app => app.id))).orderBy(desc(appRevisions.sequence));
+  const latest = new Map<string, typeof revisions[number]>();
+  for (const revision of revisions) if (!latest.has(revision.appId)) latest.set(revision.appId, revision);
+  return apps.map(app => ({ ...app, name: latest.get(app.id)?.name || "未命名应用", revisionStatus: latest.get(app.id)?.status || "DRAFT" }));
 }

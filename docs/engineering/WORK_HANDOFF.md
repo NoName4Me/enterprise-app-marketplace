@@ -4,7 +4,7 @@
 - 仓库：`NoName4Me/enterprise-app-marketplace`，主分支 `master`；现有业务代码为事实来源，不假设旧教程或生成代码正确。
 - 执行基线：[新路线图](../ROADMAP.md)、[候选需求](../product/EXPANSION_BACKLOG.md)、[架构 ADR](../decisions/ADR-002-platform-evolution.md)、[Mac mini 实验方案](MAC_MINI_LAB.md)、[验收](../acceptance/NEXT_PHASE_GATES.md)。
 - 每次 Work 只领取下述**一个可验收任务包**；不要在同一次任务里提前实现 P1–P8。用户要求中文 Conventional Commits（`type(scope): 中文说明`）、小范围可验证变更、GitHub 真实检查。
-- 2026-10-14补充：P0-T01已由PR #15修复并全量CI通过；P0-T02代码由PR #16交付，真实分支保护和失败合并负例已闭环。LAB-T00/T01已在OrbStack本机实测；**GHCR/digest LAB-T02已实际构建发布、匿名拉取、本机部署及回滚验证通过**。详见P0_T02.md、LAB_T01.md与LAB_T02.md。P1-T01已形成[本地设计草案](../design/P1_ASSET_LIFECYCLE.md)和[验收用例](../acceptance/P1_ASSET_LIFECYCLE.md)，用户已同意开发，P1-T01-A本地实现与验证见[P1交付记录](P1_ASSET_DELIVERY.md)，B/C继续分批开发。用户要求先在本地功能分支工作，开发形成可评审批次后再提PR；本设计批次不推送、不创建PR。
+- 2026-10-14补充：P0-T01已由PR #15修复并全量CI通过；P0-T02代码由PR #16交付，真实分支保护和失败合并负例已闭环。LAB-T00/T01已在OrbStack本机实测；**GHCR/digest LAB-T02已实际构建发布、匿名拉取、本机部署及回滚验证通过**。详见P0_T02.md、LAB_T01.md与LAB_T02.md。P1-T01已形成[本地设计草案](../design/P1_ASSET_LIFECYCLE.md)和[验收用例](../acceptance/P1_ASSET_LIFECYCLE.md)，用户已同意开发，P1-T01-A本地实现与验证见[P1交付记录](P1_ASSET_DELIVERY.md)，A/B/C已分批实现，实际本地验证与尚未闭环的回退等风险见该记录。用户要求先在本地功能分支工作，开发形成可评审批次后再提PR；设计及开发先本地提交，形成可验收完整批次后再提PR。
 
 ## 开始前的统一检查（每个任务都做）
 

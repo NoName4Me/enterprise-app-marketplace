@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { auth } from "../src/lib/auth";
 import { db } from "../src/db/client";
-import { applications, appComponents, appEnvironments, componentEnvironments, externalReferences, assetEvents, user, appRevisions } from "../src/db/schema";
+import { applications, appComponents, appEnvironments, componentEnvironments, externalReferences, assetEvents, user, appRevisions, appFavorites } from "../src/db/schema";
 import { GET as getAssets, PATCH as patchTeam } from "../src/app/api/my/apps/[id]/assets/route";
 import { POST as postAsset } from "../src/app/api/my/apps/[id]/assets/[resource]/route";
 import { PATCH as patchAsset } from "../src/app/api/my/apps/[id]/assets/[resource]/[resourceId]/route";
@@ -12,6 +12,8 @@ import { GET as adminEvents } from "../src/app/api/admin/apps/[id]/asset-events/
 import { GET as publicDetail } from "../src/app/api/apps/[id]/route";
 import { GET as publicList } from "../src/app/api/apps/route";
 import { POST as createApp } from "../src/app/api/my/apps/route";
+import { GET as publicCommunity } from "../src/app/api/apps/[id]/community/route";
+import { matchScenarios } from "../src/domain/discovery";
 import { createAsset } from "../src/domain/asset-service";
 
 import { POST as lifeChange } from "../src/app/api/my/apps/[id]/lifecycle/transitions/route";
@@ -234,12 +236,19 @@ describe.sequential("P1-A private asset registration on real PostgreSQL", () => 
     await db.update(applications).set({ listingStatus: "LISTED", publishedRevisionId: approved.id }).where(eq(applications.id, id));
     const before = await (await publicDetail(request("GET", cookies.employee), context(id))).json();
     const listBefore = await (await publicList(request("GET", cookies.employee))).json();
+    const communityBefore = await (await publicCommunity(request("GET", cookies.employee), context(id))).json();
+    await db.insert(appFavorites).values({ appId: id, userId: ids.employee });
+    const savedRequest = () => new Request(base + "/api/apps?saved=true", { headers: { cookie: cookies.employee } });
+    const savedBefore = await (await publicList(savedRequest())).json();
     await db.insert(appRevisions).values({ appId: id, sequence: 2, status: "PENDING", createdBy: ids.owner, name: "Private pending", targetUrl: "https://example.test/new" });
     await create(id, "components", { key: "secret", name: "Private component", notes: "Private note" });
     const response = await patchTeam(request("PATCH", cookies.owner, { expectedVersion: await version(id), responsibleTeamName: "Private team" }), context(id));
     expect(response.status).toBe(200);
     expect(await (await publicDetail(request("GET", cookies.employee), context(id))).json()).toEqual(before);
-    expect(await (await publicList(request("GET", cookies.employee))).json()).toEqual(listBefore);
+    expect(await (await publicList(request("GET", cookies.employee))).json()).toEqual(listBefore.map((item: { id: string }) => item.id === id ? { ...item, saved: true, favorites: 1 } : item));
+    expect(await (await publicList(savedRequest())).json()).toEqual(savedBefore);
+    expect(await (await publicCommunity(request("GET", cookies.employee), context(id))).json()).toEqual({ ...communityBefore, saved: true });
+    expect(matchScenarios("Private team", await (await publicList(savedRequest())).json())).toEqual([]);
     const own = await getAssets(request("GET", cookies.owner), context(id));
     expect(own.headers.get("cache-control")).toBe("private, no-store");
     const denied = await getAssets(request("GET", cookies.employee), context(id));
