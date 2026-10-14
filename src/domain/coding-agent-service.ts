@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import { codingTasks, externalReferences, appComponents, requirements } from "@/db/schema";
 import { authorizeActor, type Actor } from "./actor";
@@ -28,7 +28,8 @@ async function sourceRepo(appId: string) {
     .from(externalReferences)
     .innerJoin(appComponents, and(eq(appComponents.id, externalReferences.componentId),
       eq(appComponents.appId, externalReferences.appId)))
-    .where(and(eq(externalReferences.appId, appId), eq(externalReferences.resourceKind, "REPOSITORY")));
+    .where(and(eq(externalReferences.appId, appId), eq(externalReferences.resourceKind, "REPOSITORY"),
+      isNull(externalReferences.archivedAt), isNull(appComponents.archivedAt)));
   const allowed = allowedRepositories();
   const possible = [...new Set(refs.map(x => x.repo).filter(x =>
     REPO.test(x) && allowed.has(x.toLowerCase())))];
