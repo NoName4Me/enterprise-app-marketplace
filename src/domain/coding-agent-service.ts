@@ -60,6 +60,7 @@ export async function startCodingTask(actor: Actor | null, requirementId: string
     "Type: " + req.type,
     "Description:\n" + req.description.slice(0, 3500),
   ].join("\n\n");
+  let rejectedByProvider = false;
   try {
     const response = await fetch(GITHUB + "/agents/repos/" + repo + "/tasks", {
       method: "POST", cache: "no-store", redirect: "error",
@@ -67,7 +68,10 @@ export async function startCodingTask(actor: Actor | null, requirementId: string
       body: JSON.stringify({ prompt, base_ref: "dev", create_pull_request: true }),
       signal: AbortSignal.timeout(15000),
     });
-    if (!response.ok) throw new Error("remote_task_failed");
+    if (!response.ok) {
+      rejectedByProvider = [400, 401, 403, 404, 422].includes(response.status);
+      throw new Error("remote_task_failed");
+    }
     const value: unknown = await response.json();
     const obj = value && typeof value === "object" ? value as Record<string, unknown> : {};
     const taskId = String(obj.id ?? "");
@@ -77,6 +81,12 @@ export async function startCodingTask(actor: Actor | null, requirementId: string
     return { id: created.id, state: "ACCEPTED", repository: repo,
       note: "GitHub 已接受编码任务。是否创建 PR、测试是否通过，仍需查询 GitHub 真实状态。" };
   } catch {
+    // A definitive 4xx rejection did not create a task; allow retry after fixing credentials / eligibility.
+    if (rejectedByProvider) {
+      await db.delete(codingTasks).where(eq(codingTasks.id, created.id));
+      return { id: created.id, state: "REJECTED_BY_PROVIDER", repository: repo,
+        note: "GitHub 明确拒绝任务：请检查 Copilot Cloud Agent 资格、用户令牌和仓库设置，修正后可再次发起。" };
+    }
     await db.update(codingTasks).set({ state: "UNKNOWN", updatedAt: new Date() })
       .where(eq(codingTasks.id, created.id));
     return { id: created.id, state: "UNKNOWN", repository: repo,
