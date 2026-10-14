@@ -8,6 +8,8 @@ import { getPageUser } from "@/lib/page-user";
 import { categoryNames } from "@/lib/marketplace-labels";
 import { getCommunity } from "@/domain/community-service";
 import { CommunityPanel } from "./community-panel";
+import { RequestAccessPanel } from "./request-access-panel";
+import { myAppAccessRequest } from "@/domain/access-request-service";
 import { FavoriteButton } from "@/app/components/favorite-button";
 import { AppIcon } from "@/app/components/app-icon";
 
@@ -21,7 +23,10 @@ export default async function AppDetail({ params }: { params: Promise<{ id: stri
     if (error instanceof AppError && error.status === 404) notFound();
     throw error;
   }
-  const community = await getCommunity({ id: user.id }, app.id);
+  const [community, myRequest] = await Promise.all([
+    getCommunity({ id: user.id }, app.id),
+    myAppAccessRequest({ id: user.id }, app.id),
+  ]);
   return <SiteNav user={user}>
     <p><Link href="/apps">← 返回应用市场</Link></p>
     <div className="card detail-card">
@@ -41,6 +46,7 @@ export default async function AppDetail({ params }: { params: Promise<{ id: stri
       <h2>应用介绍</h2>
       <p className="pre-wrap">{app.description || "发布者尚未填写详细介绍。"}</p>
     </section>
+    <RequestAccessPanel appId={app.id} initial={myRequest} />
     <CommunityPanel appId={app.id} data={community} />
   </SiteNav>;
 }

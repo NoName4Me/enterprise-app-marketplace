@@ -264,3 +264,43 @@ export const assetEvents = pgTable("asset_events", {
   check("asset_event_resource_check", sql`${t.resourceType} IN ('application','components','environments','bindings','references')`),
   check("asset_event_version_check", sql`${t.assetVersionAfter} > 1`),
 ]);
+
+/**
+ * P2: Portal access request decision and manually recorded provisioning are separate facts.
+ * This table never asserts that the target application actually granted access.
+ */
+export const appAccessRequests = pgTable("app_access_requests", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  appId: uuid("app_id").notNull().references(() => applications.id, { onDelete: "restrict" }),
+  requesterUserId: text("requester_user_id").notNull().references(() => user.id, { onDelete: "restrict" }),
+  reason: text("reason").notNull(),
+  status: text("status", { enum: ["PENDING", "APPROVED", "REJECTED"] }).notNull().default("PENDING"),
+  decidedBy: text("decided_by").references(() => user.id, { onDelete: "restrict" }),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  decisionReason: text("decision_reason"),
+  provisioningStatus: text("provisioning_status", { enum: ["NOT_STARTED", "PENDING", "MANUAL_RECORDED"] }).notNull().default("NOT_STARTED"),
+  provisionedBy: text("provisioned_by").references(() => user.id, { onDelete: "restrict" }),
+  provisionedAt: timestamp("provisioned_at", { withTimezone: true }),
+  provisioningNote: text("provisioning_note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [
+  uniqueIndex("access_requests_one_active_idx").on(t.appId, t.requesterUserId)
+    .where(sql`${t.status} IN ('PENDING','APPROVED')`),
+  index("access_requests_requester_idx").on(t.requesterUserId, t.createdAt),
+  index("access_requests_status_idx").on(t.status, t.createdAt),
+  check("access_request_reason_check", sql`length(${t.reason}) BETWEEN 5 AND 500`),
+  check("access_request_status_check", sql`${t.status} IN ('PENDING','APPROVED','REJECTED')`),
+  check("access_request_provision_status_check", sql`${t.provisioningStatus} IN ('NOT_STARTED','PENDING','MANUAL_RECORDED')`),
+  check("access_request_decision_check", sql`(
+    (${t.status} = 'PENDING' AND ${t.decidedBy} IS NULL AND ${t.decidedAt} IS NULL AND ${t.provisioningStatus} = 'NOT_STARTED')
+    OR (${t.status} = 'REJECTED' AND ${t.decidedBy} IS NOT NULL AND ${t.decidedAt} IS NOT NULL AND ${t.provisioningStatus} = 'NOT_STARTED')
+    OR (${t.status} = 'APPROVED' AND ${t.decidedBy} IS NOT NULL AND ${t.decidedAt} IS NOT NULL AND ${t.provisioningStatus} IN ('PENDING','MANUAL_RECORDED'))
+  )`),
+  check("access_request_provision_check", sql`(
+    (${t.provisioningStatus} <> 'MANUAL_RECORDED' AND ${t.provisionedBy} IS NULL AND ${t.provisionedAt} IS NULL AND ${t.provisioningNote} IS NULL)
+    OR (${t.provisioningStatus} = 'MANUAL_RECORDED' AND ${t.provisionedBy} IS NOT NULL AND ${t.provisionedAt} IS NOT NULL AND ${t.provisioningNote} IS NOT NULL AND length(${t.provisioningNote}) BETWEEN 5 AND 500)
+  )`),
+  check("access_request_no_self_decision", sql`${t.decidedBy} IS NULL OR ${t.decidedBy} <> ${t.requesterUserId}`),
+  check("access_request_no_self_provision", sql`${t.provisionedBy} IS NULL OR ${t.provisionedBy} <> ${t.requesterUserId}`),
+]);
