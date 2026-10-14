@@ -70,3 +70,11 @@ spec:
 维护者或管理员打开应用私有工作台，点击「读取实际 GitOps 状态」。后端**先检查当前登录用户对该应用的权限**，只向运营配置的 Argo CD API 发起固定标签筛选请求，响应再次验证应用/活跃环境 UUID 和项目允许列表；不返回令牌、其他应用资料，也不访问任意登记的 URL。未连接、查询错误、无匹配明确分开显示。任何 GitHub CI 结果或 GitOps Synced 状态均不能被门户当作实际发布成功，更不能当成流量已切换。
 
 下一批应在现有 LAB 验证基础上配置单台 Mac mini 内的 Linux/k3s 集群、Argo CD / Argo Rollouts 和受控 GitOps 仓库，并验证：可信镜像 Digest → GitOps 目标更新 → Argo 实际调谐 → Rollout 健康 → 门户只读状态；随后再接 Prometheus/Loki 证据与 AI 只读诊断。现阶段**尚未执行** Mac 安装或端到端验收，禁止将此功能标为生产部署完成。
+
+## P3/P5 需求中心和云端编码联调
+
+- 新增数据库迁移 0008_requirements_coding_tasks.sql（需求、评论、Coding Agent 任务）；CI 在隔离 PostgreSQL 上验证，**不要跳过目标 DATABASE_URL 检查直接迁移 Mac 上有数据的库**。
+- 员工访问 /requirements，已上架应用详情可以链接提交该应用的缺陷和功能需求。维护者认领处理并记录 GitHub Issue/PR；处理完成是人工登记，不能据此认定 CI/发布成功。
+- 使用当前 `.env` 中的 `AIOPS_LLM_API_KEY`（或 `DEEPSEEK_API_KEY`），`AIOPS_LLM_BASE_URL`，`AIOPS_LLM_MODEL` 供 P4 诊断和 P3 应用语义排序共用。默认不把原始 Loki 日志送给第三方模型。只读取服务端变量，不在浏览器暴露密钥。
+- P5 选用 GitHub Copilot Cloud Agent 的公开 API；需要 `P5_COPILOT_USER_TOKEN`（**用户令牌**，非 GitHub App 安装令牌）和 `P5_ALLOWED_REPOS`。仅允许应用 owner 向明确登记且未归档、白名单内唯一 GitHub 仓库派发任务；需要该仓库启用/有权限使用 Copilot Cloud Agent。外部任务超时会记录 UNKNOWN，必须人工核对后处理。
+- P5 任务默认以 dev 为基线并请求 GitHub 创建 PR，**不会自动合并、测试环境发布或改动 Mac 本地文件**。普通运维 Token 与 Coding Agent Token 分开。

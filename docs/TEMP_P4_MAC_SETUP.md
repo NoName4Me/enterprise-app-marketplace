@@ -165,3 +165,7 @@ Argo CD 内建 Rollout 资源动作 promote-full、abort；门户测试环境内
 ## 云端模型信息边界
 
 P4 不安装 Ollama。DeepSeek 默认使用 https://api.deepseek.com/chat/completions；也可用任意受信、兼容 OpenAI Chat Completions 的 HTTPS 服务商 URL 配置 AIOPS_LLM_BASE_URL（不用填 /chat/completions 后缀）。仅服务器端读取密钥，默认只发送 Argo/GitHub 概要、Prometheus 指标和告警；原始 Loki 日志**默认不发送**，避免员工数据及 Token 外流。按需显式启用 AIOPS_LLM_SEND_LOGS=true 前先检查脱敏策略。
+
+## P3/P5 与单机联调关系
+
+P3 需求中心使用门户 PostgreSQL，必须在**隔离测试库验证**新迁移 0008 后再对 Mac 上已存在数据的数据库按既有流程增量迁移（不可清空卷）。P5 不需要在 Mac 上安装 Coding Agent，GitHub 服务器端运行 Copilot Cloud Agent；只需本地服务端 `.env` 配置 `P5_COPILOT_USER_TOKEN`、`P5_ALLOWED_REPOS`，仓库需具备 Copilot 付费资格并启用该能力。未开通时返回 NOT_CONNECTED/配置缺失，不会假装 Agent 已运行。DeepSeek 等云端模型 API 不依赖本机 GPU/Ollama。

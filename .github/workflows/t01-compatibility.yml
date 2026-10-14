@@ -44,6 +44,12 @@ jobs:
         run: pnpm db:generate
       - name: Apply migration to isolated test database
         run: pnpm db:migrate
+      - name: Verify P3/P5 migration metadata has no schema drift (PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          pnpm db:generate
+          git diff --exit-code -- drizzle/
+          test -z "$(git ls-files --others --exclude-standard drizzle/)"
       - name: Bootstrap initial administrator (isolated fixture database)
         if: github.event_name == 'push'
         run: |
