@@ -72,8 +72,12 @@ jobs:
       - name: Verify local lab service and Compose isolation
         run: |
           node --test lab/test-service/server.test.mjs
+          node --test lab/release-policy.test.mjs
+          bash -n lab/publish.sh
+          node --check lab/deploy.mjs
           node lab/init-env.mjs
           docker compose -p marketplace-lab --env-file lab/.env -f compose.yaml -f lab/compose.yaml config --quiet
+          LAB_RELEASE_IMAGE=ghcr.io/noname4me/enterprise-app-marketplace-lab@sha256:$(printf '0%.0s' {1..64}) docker compose -p marketplace-lab-release -f lab/release.compose.yaml config --quiet
       - name: Install Chromium for end-to-end tests
         run: pnpm exec playwright install --with-deps chromium
       - name: Browser end-to-end journey

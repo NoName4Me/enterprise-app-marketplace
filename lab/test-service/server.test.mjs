@@ -21,6 +21,8 @@ test("仅本地允许固定故障；故障健康为503，版本仍可核对", as
   assert.throws(() => createLabServer({ revision: "latest" }));
   await withServer({ fault: "unhealthy" }, async base => {
     assert.equal((await fetch(base + "/health")).status, 503);
-    assert.equal((await fetch(base + "/version")).status, 200);
+    const version = await fetch(base + "/version");
+    assert.equal(version.status, 200);
+    assert.equal((await version.json()).faultMode, "unhealthy");
   });
 });

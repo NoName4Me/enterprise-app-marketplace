@@ -27,4 +27,4 @@ sh lab/run.sh stop        # 停止容器/网络，保留实验数据卷
 
 故障只能由本机环境参数选择healthy/unhealthy，不能从HTTP注入。容器非root、只读文件系统、drop ALL capabilities、不挂Docker socket、64MiB上限、日志滚动；PostgreSQL256MiB上限。所有端口只绑定127.0.0.1。没有Jenkins/GitLab/Kubernetes/新监控系统。
 
-本机实测见[证据](../docs/engineering/LAB_T01.md)。CI只验证服务测试和Compose配置，并继续门户全套检查；它不部署用户Mac，也不发布GHCR。**LAB-T02 BLOCKED：先完成真实合并保护与门禁拒绝测试，再单独接入可信GitHub Actions → GHCR → 本机digest部署/回滚。** 当前本地故障恢复不等于镜像digest回滚验收，也不等于生产可靠性验证。
+本机实测见[证据](../docs/engineering/LAB_T01.md)。PR CI只验证服务/发布策略/Compose配置，并继续门户全套检查；它不部署用户Mac或发布GHCR。GATE-04已闭环。独立可信master成功CI可触发ARM64 GHCR发布，手动本机digest部署使用另一个端口3382和独立项目，见[LAB-T02手册](../docs/engineering/LAB_T02.md)。LAB-T01的环境故障恢复不等于镜像digest回滚，也不等于生产可靠性验证。

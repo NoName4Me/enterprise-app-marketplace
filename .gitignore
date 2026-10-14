@@ -13,3 +13,4 @@ playwright-report/
 # Local macOS metadata and package cache
 .DS_Store
 .pnpm-store/
+.lab-release-records/

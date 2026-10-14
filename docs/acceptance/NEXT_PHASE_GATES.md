@@ -47,6 +47,6 @@
 ## 2026-10-14 实测更新
 
 - GATE-01/02/03 PASS：P0-T01 PR #15 最新提交全量 [CI](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38427220144)；P0-T02依赖修补后全量 [CI](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38428935965)。
-- GATE-04 BLOCKED：尚无生效分支保护；保存遇GitHub二次认证。检查失败不等于合并阻断，具体步骤见[记录](../engineering/P0_T02.md)。
+- GATE-04 PASS：分支保护API复核、标题检查失败时按钮禁用；[业务负例 PR #23](https://github.com/NoName4Me/enterprise-app-marketplace/pull/23) 的 validate 失败后真实合并请求 HTTP405 被拒绝，PR关闭未合并。详见[记录](../engineering/P0_T02.md)。
 - LAB-01 PASS：实际Mac M4/OrbStack，隔离数据库、门户和实验服务启动/持久化/故障恢复/停止，详见[本机证据](../engineering/LAB_T01.md)及对应PR最新SHA检查。
-- LAB-02/03/04 BLOCKED/NOT RUN：未发布GHCR、未按GHCR digest部署和回滚；须先闭环GATE-04。
+- LAB-02/03/04 NOT RUN：GATE-04已通过，可信ARM64发布/本机部署配置已生成；真实GHCR发布、按摘要部署与回滚须在LAB-T02合并后执行并补证据，见[记录](../engineering/LAB_T02.md)。
