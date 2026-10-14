@@ -13,7 +13,7 @@ export function createLabServer({ mode = "local", fault = "healthy", revision = 
       response.writeHead(404).end(JSON.stringify({ error: "not_found" })); return;
     }
     if (path === "/version") {
-      response.end(JSON.stringify({ service: "marketplace-lab", revision, environment: "local-lab" })); return;
+      response.end(JSON.stringify({ service: "marketplace-lab", revision, environment: "local-lab", faultMode: fault })); return;
     }
     response.writeHead(fault === "healthy" ? 200 : 503).end(JSON.stringify({ status: fault === "healthy" ? "ok" : "failed", faultInjected: fault === "unhealthy" }));
   });

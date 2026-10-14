@@ -1,0 +1,18 @@
+# Separate project/port from LAB-T01 and existing development services.
+services:
+  release:
+    image: ${LAB_RELEASE_IMAGE:?Expected a validated GHCR digest}
+    platform: linux/arm64
+    pull_policy: never
+    ports: ["127.0.0.1:3382:8080"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 64m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 3
+    logging: { driver: json-file, options: { max-size: "5m", max-file: "2" } }

@@ -1,0 +1,64 @@
+name: LAB - Trusted ARM64 GHCR publication
+on:
+  workflow_run:
+    workflows: [CI - Marketplace and container smoke]
+    types: [completed]
+    branches: [master]
+permissions:
+  contents: read
+concurrency:
+  group: lab-ghcr-publication
+  cancel-in-progress: false
+jobs:
+  trusted-ci:
+    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      sha: ${{ steps.verify.outputs.sha }}
+      ci_run_id: ${{ steps.verify.outputs.ci_run_id }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: node lab/verify-ci.mjs
+  publish:
+    needs: trusted-ci
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.trusted-ci.outputs.sha }}
+          persist-credentials: false
+      - name: Recheck CI and current master before publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_RUN_ID: ${{ needs.trusted-ci.outputs.ci_run_id }}
+        run: node lab/verify-ci.mjs
+      - name: Build, smoke-test and publish two ARM64 digests
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_ACTOR: ${{ github.actor }}
+          SOURCE_SHA: ${{ needs.trusted-ci.outputs.sha }}
+          CI_RUN_ID: ${{ needs.trusted-ci.outputs.ci_run_id }}
+          PUBLISH_RUN_ID: ${{ github.run_id }}
+        run: bash lab/publish.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: lab-release
+          path: lab-release.json
+          if-no-files-found: error
+          retention-days: 30
