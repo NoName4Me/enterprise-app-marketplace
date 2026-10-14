@@ -43,3 +43,8 @@ node lab/deploy.mjs stop
 ```
 
 发布 job 只对受信当前 master CI、仓库、`validate` 成功进行校验，才获得短期 `packages:write` 并构建 ARM64 digest。旧 `workflow_run` 发布记录继续保持核验兼容。**变更目前只在 dev 分支，未进入默认分支前不可声称手动新工作流已在云端验证。** Mac 单机摘要回滚不等于生产高可用或数据库回滚。历史证据在 PR #17/#24。
+## GitHub 资产只读同步（P1-02）
+
+在应用维护者或管理员的私有资产工作台登记 GitHub 仓库/Workflow 后，点击“读取 GitHub 最新信息”查询最近提交、PR 与 Actions。请求只访问 GitHub 官方 REST API，不新增数据库和定时采集；结果只读，有来源、读取时间与不可访问/未知状态。CI 成功 **不代表** 镜像已部署、环境健康或目标应用实际可用。
+
+公开仓库无需令牌；私有仓库可在本地服务器 `.env` 中配置 `GITHUB_READ_TOKEN` 与 `GITHUB_ALLOWED_REPOS`（逗号分隔 `owner/name`，参照 `.env.example`）。建议使用仅授予指定仓库的 GitHub fine-grained token、只读 Contents/Pull requests/Actions 权限；**只有列入允许清单的仓库才会携带令牌**。不要把令牌写进网页、仓库或镜像，缺少权限时界面显示无法访问。API 读取频率有基本限流缓存，点击后才发起查询；真实部署与监控仍在 P4 实现。

@@ -6,7 +6,7 @@
 员工/维护者/未来审批与运维人员
  → Next.js 页面、API、服务端权限
    → PostgreSQL：市场、审核、收藏讨论、P1资产与生命周期
-   → 外部 GitHub 仓库/流水线引用（目前只登记）
+   → 外部 GitHub 仓库/流水线登记 + 私有工作台按需只读查询
 GitHub Repo → Actions → GHCR ARM64 镜像 → Mac mini OrbStack 实验环境
 P4+ 第三方监控/告警聚合；P5+ 独立 AI Worker/持久任务
 ```

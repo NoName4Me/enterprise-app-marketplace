@@ -4,7 +4,7 @@
 
 - `applications` 是唯一应用身份，当前 `owner_user_id` 单所有者；团队名称不产生团队 ACL，`asset_version` 处理乐观并发。
 - Component、Environment、ComponentEnvironment 显式管理组件/环境组合；属于同一应用，由复合 FK 和服务端校验保护；资源归档/恢复需要检查引用与审计。
-- ExternalReference 只登记 GitHub repo/workflow，不执行、不验证连通；无监控数据是 `NOT_CONNECTED`，不是健康/部署成功。AssetEvent 与资源状态、版本同一事务。
+- ExternalReference 只登记 GitHub repo/workflow，不授予执行权限；P1-02 在私有资产页可按需只读查询 GitHub 最近提交、PR 和 Actions，并显示访问失败与时间，不将引用本身视为已验证连接；无部署/监控数据仍是 `NOT_CONNECTED`，不是健康/部署成功。AssetEvent 与资源状态、版本同一事务。
 - 市场审核快照 `app_revisions`、治理生命周期、部署、健康分开；资产编辑不能修改已批准公开指针。
 
 生命周期：`UNKNOWN`、`PILOT`、`ACTIVE`、`DEPRECATED`、`RETIRED`；合法转换以源码 `lifecycle-validation.ts` 为准。退役必须弃用、下架、无待处理登记草稿、无未归档活跃资产/引用；退役仅是门户治理事实，不代表目标服务已下线。管理员专用恢复/移交须单独授权，禁止转移所有权导致提交者自批。
