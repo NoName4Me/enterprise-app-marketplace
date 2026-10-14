@@ -72,7 +72,7 @@ import { sql } from "drizzle-orm";
 
 // T02: catalog identity and immutable review snapshots are separate entities.
 // Application's current public revision pointer is assigned only in an approval
-// transaction. See docs/design/PUBLISHING_MODEL.md for the consistency invariant.
+// transaction. See docs/ARCHITECTURE.md for the consistency invariant.
 export const applications = pgTable("applications", {
   id: uuid("id").defaultRandom().primaryKey(),
   ownerUserId: text("owner_user_id").notNull().references(() => user.id),

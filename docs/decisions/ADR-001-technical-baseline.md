@@ -1,9 +1,11 @@
 # ADR-001：MVP-1 技术基线与演进策略
 
+> 历史设计；旧状态说明不代表当前完成情况，以 [ROADMAP](../ROADMAP.md) 和源码为准。
+
 - 状态：**Accepted for MVP-1 implementation**（认证基础兼容性已由 CI 验证；后续业务尚待实现）
 - 日期：2026-10-13
 - 决策范围：首个纵向闭环，不等于未来产品永久技术承诺
-- 业务前提：参考 [已确认产品决策](README.md)
+- 业务前提：参考 [已确认产品决策](../PRODUCT.md)
 
 ## 背景
 
@@ -41,11 +43,11 @@
 ## 最小实现验证要求
 
 详见：
-- [架构设计](../design/ARCHITECTURE.md)
-- [权限矩阵](../design/PERMISSIONS.md)
-- [状态与领域模型](../design/PUBLISHING_MODEL.md)
-- [验收用例](../acceptance/MVP1.md)
-- [AI Coding 任务包](../engineering/AGENT_TASK_01.md)
+- [架构设计](../ARCHITECTURE.md)
+- [权限矩阵](../ARCHITECTURE.md)
+- [状态与领域模型](../ARCHITECTURE.md)
+- [验收用例](../QUALITY.md)
+- [AI Coding 任务包](../../AGENTS.md)
 
 ## 参考官方文档
 
@@ -60,4 +62,4 @@
 
 早期设想使用自定义 `isAdmin` / `disabled` 字段，实际改为 Better Auth Admin 插件的 `role` / `banned`；原因是使用经过版本化验证的账号创建、禁用/恢复和 Session 撤销机制优于自研这些安全敏感逻辑。业务创建权继续使用 `canCreateApp`，在受保护请求中实时读取 PostgreSQL。
 
-P0-T01 使用受控的 Better Auth 官方服务端 API，替代会重新实例化配置的 CLI；外层脚本保留 advisory lock，事务内锁表复查空库，并验证唯一管理员账号。详见 [修复证据与权衡](../engineering/P0_T01.md)。
+P0-T01 使用受控的 Better Auth 官方服务端 API，替代会重新实例化配置的 CLI；外层脚本保留 advisory lock，事务内锁表复查空库，并验证唯一管理员账号。详见 [修复证据与权衡](https://github.com/NoName4Me/enterprise-app-marketplace/pull/15)。
