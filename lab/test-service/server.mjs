@@ -19,6 +19,8 @@ export function createLabServer({ mode = "local", fault = "healthy", revision = 
       response.end("# HELP marketplace_lab_health Lab service healthy=1, fault=0\n" +
         "# TYPE marketplace_lab_health gauge\n" +
         "marketplace_lab_health " + (fault === "healthy" ? "1" : "0") + "\n" +
+        "# TYPE marketplace_lab_info gauge\n" +
+        "marketplace_lab_info{revision=" + JSON.stringify(revision) + "} 1\n" +
         "# TYPE marketplace_lab_requests_total counter\n" +
         "marketplace_lab_requests_total " + requests + "\n");
       return;

@@ -144,3 +144,7 @@ Loki 使用单体、短期保留和本地文件存储，非高可用。Grafana L
 再为账号 portal 配置 marketplace-lab/* 范围的 applications,get RBAC，并使用 argocd account generate-token --account portal 获取 Token。不要覆盖已有的 argocd-rbac-cm.policy.csv；应追加一条角色策略和账号映射。查询失败通常是 Token 权限不足、服务端无法连通或 Argo Application 标签/Project 映射不一致。
 
 目前 AI 只读诊断要求本机 Ollama（/api/chat 协议）及 AIOPS_MODEL。未安装模型时按钮显示 NOT_CONNECTED；模型分析只是建议，不能当成已完成自动修复。
+
+## 11. 生效版本判定
+
+Argo CD 的 desiredRevision 和 history.revision 表示 **GitOps 声明/同步历史**，不能直接当成 active 流量版本。P4 Lab ServiceMonitor 抓取 Rollouts active Service 的 /metrics 中 marketplace_lab_info{revision=...}；门户会在这个时间序列**恰好只有一条**时显示其观测 SHA。多条或无样本则显示未知，绝不据此声称发布完成。正式验收仍需用入口 /version 直接核对。

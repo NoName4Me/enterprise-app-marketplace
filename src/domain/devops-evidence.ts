@@ -4,7 +4,7 @@ import type { Actor } from "./actor";
 import type { ArgoOverview } from "./argocd-model";
 
 export type SignalState = "OK" | "NOT_CONNECTED" | "UNKNOWN";
-export type ObservedMetric = { name: string; value: number; sampledAt: string | null };
+export type ObservedMetric = { name: string; value: number; sampledAt: string | null; revision?: string };
 export type LogEntry = { at: string | null; line: string };
 export type Signal<T> = {
   source: string;
@@ -62,6 +62,7 @@ function isoEpoch(value: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 const metricQueries = [
+  { name: "active_release", query: (ns: string) => 'marketplace_lab_info{namespace="' + ns + '"}' },
   { name: "active_lab_health", query: (ns: string) => 'min(marketplace_lab_health{namespace="' + ns + '"})' },
   { name: "namespace_ready_pods", query: (ns: string) => 'sum(kube_pod_status_ready{namespace="' + ns + '",condition="true"})' },
   { name: "namespace_container_restarts", query: (ns: string) => 'sum(kube_pod_container_status_restarts_total{namespace="' + ns + '"})' },
@@ -107,10 +108,13 @@ export async function collectDevopsEvidence(actor: Actor | null, appId: string, 
           const result = obj(all[i]);
           if (result.status !== "success") throw new Error("bad_query_status");
           const series = arr(obj(result.data).result);
+          if (metricQueries[i].name === "active_release" && series.length !== 1) continue;
+          const revision = String(obj(obj(series[0]).metric).revision || "");
           const sample = arr(obj(series[0]).value);
           if (sample.length !== 2) continue;
           const value = Number(sample[1]);
-          if (Number.isFinite(value)) items.push({ name: metricQueries[i].name, value, sampledAt: isoEpoch(sample[0]) });
+          if (Number.isFinite(value)) items.push({ name: metricQueries[i].name, value, sampledAt: isoEpoch(sample[0]),
+            ...(metricQueries[i].name === "active_release" && (/^[a-f0-9]{40}$/.test(revision) || revision === "local") ? { revision } : {}) });
         }
         metrics.items = items;
         metrics.state = items.length ? "OK" : "UNKNOWN";
