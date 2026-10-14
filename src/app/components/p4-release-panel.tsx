@@ -19,6 +19,7 @@ export function P4ReleasePanel({ root }: { root: string }) {
         result.error === "p4_operator_required" ? "账号不在 P4 实验发布操作者名单中。"
         : result.error === "p4_dispatch_not_configured" ? "服务端未配置 GitHub 派发令牌。"
         : result.error === "p4_test_environment_required" ? "请先登记有效的 TEST 环境。"
+        : result.error === "p4_application_not_bound" ? "请先将该应用的 TEST 环境关联到 marketplace-lab Argo Application，并确保 Argo 可读。"
         : "派发失败：请核对 Run ID、发布权限及默认分支上的工作流。");
       setMessage(result.note ?? "派发请求已接受。");
     } catch (e) { setError(e instanceof Error ? e.message : "派发失败。"); }

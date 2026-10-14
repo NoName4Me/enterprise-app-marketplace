@@ -1,5 +1,6 @@
 import { authorizeActor, type Actor } from "./actor";
 import { getAssets } from "./asset-service";
+import { getArgoOverview } from "./argocd-overview";
 import { AppError } from "./app-errors";
 
 export async function requestLabPromotion(actor: Actor | null, appId: string, payload: Record<string, unknown>) {
@@ -9,6 +10,12 @@ export async function requestLabPromotion(actor: Actor | null, appId: string, pa
   if (!allowed.has(current.id)) throw new AppError(403, "p4_operator_required");
   if (assets.lifecycleStatus === "RETIRED" || !assets.environments.some(env => !env.archivedAt && env.purpose === "TEST"))
     throw new AppError(422, "p4_test_environment_required");
+  const argo = await getArgoOverview(actor, appId, false);
+  const testEnvironmentIds = new Set(assets.environments.filter(env => !env.archivedAt && env.purpose === "TEST").map(env => env.id));
+  if (argo.state !== "OK" || !argo.applications.some(item =>
+    item.name === "marketplace-lab" && item.namespace === "marketplace-lab" &&
+    testEnvironmentIds.has(item.environmentId)))
+    throw new AppError(422, "p4_application_not_bound");
   const runId = payload.publicationRunId;
   const variant = payload.variant;
   if (typeof runId !== "string" || !/^[1-9][0-9]{0,18}$/.test(runId) ||
