@@ -14,6 +14,13 @@ import { GET as publicList } from "../src/app/api/apps/route";
 import { POST as createApp } from "../src/app/api/my/apps/route";
 import { createAsset } from "../src/domain/asset-service";
 
+import { POST as lifeChange } from "../src/app/api/my/apps/[id]/lifecycle/transitions/route";
+import { GET as preflight } from "../src/app/api/my/apps/[id]/lifecycle/preflight/route";
+import { POST as adminLifeChange } from "../src/app/api/admin/apps/[id]/lifecycle/transitions/route";
+import { POST as ownerTransfer } from "../src/app/api/admin/apps/[id]/owner-transfer/route";
+import { editDraft, openNewDraft, submitDraft, reviewRevision } from "../src/domain/app-service";
+import { manageListing } from "../src/domain/community-service";
+
 const base = "http://localhost:3000";
 const prefix = "p1-" + Date.now();
 const secret = "CI-fixture-asset-password-345678!";
@@ -264,4 +271,147 @@ describe.sequential("P1-A private asset registration on real PostgreSQL", () => 
     expect((await getEvents(bad, context(id))).status).toBe(422);
     expect(await db.select().from(assetEvents).where(and(eq(assetEvents.appId, id), eq(assetEvents.actorUserId, ids.owner)))).toHaveLength(51);
   });
+});
+
+async function lifecycle(id: string, to: string, label = "owner", admin = false, status = 200, expectedVersion?: number) {
+  const [stored] = await db.select({ assetVersion: applications.assetVersion }).from(applications).where(eq(applications.id, id));
+  const response = await (admin ? adminLifeChange : lifeChange)(request("POST", cookies[label], { expectedVersion: expectedVersion ?? stored.assetVersion, to, reason: "测试治理阶段", ...(to === "RETIRED" ? { impactAcknowledged: true } : {}) }), context(id));
+  expect(response.status).toBe(status); return response.json();
+}
+async function readyForRetirement() {
+  const id = await app();
+  const [revision] = await db.update(appRevisions).set({ status: "APPROVED" }).where(eq(appRevisions.appId, id)).returning();
+  await db.update(applications).set({ publishedRevisionId: revision.id, lifecycleStatus: "DEPRECATED" }).where(eq(applications.id, id));
+  return { id, revision };
+}
+describe.sequential("P1-B lifecycle and owner governance", () => {
+  it("keeps lifecycle independent of market approval and refuses skipped transitions", async () => {
+    const id = await app();
+    await lifecycle(id, "PILOT"); await lifecycle(id, "ACTIVE"); await lifecycle(id, "DEPRECATED");
+    const [stored] = await db.select().from(applications).where(eq(applications.id, id));
+    expect(stored.listingStatus).toBe("UNLISTED"); expect(stored.publishedRevisionId).toBeNull();
+    expect(stored.assetVersion).toBe(4);
+    const check = await (await preflight(request("GET", cookies.owner), context(id))).json();
+    expect(check).toMatchObject({ externalImpact: "UNKNOWN", integrationStatus: "NOT_CONNECTED", retirementBlockers: ["OPEN_REVISION"] });
+    await lifecycle(id, "RETIRED", "owner", false, 409);
+    expect((await preflight(request("GET", cookies.employee), context(id))).status).toBe(404);
+    expect((await preflight(request("GET"), context(id))).status).toBe(401);
+    await lifecycle(id, "ACTIVE"); await lifecycle(id, "RETIRED", "owner", false, 409);
+    await lifecycle(id, "DEPRECATED", "admin", true, 403);
+  });
+  it("requires archive/downlisting/manual attestation and preserves history on retirement/restoration", async () => {
+    const { id, revision } = await readyForRetirement();
+    const c = (await create(id, "components", { key: "api", name: "API" })).resource;
+    await lifecycle(id, "RETIRED", "owner", false, 409);
+    await patch(id, "components", c.id, { archived: true });
+    await db.update(applications).set({ listingStatus: "LISTED" }).where(eq(applications.id, id));
+    await lifecycle(id, "RETIRED", "owner", false, 409);
+    await manageListing({ id: ids.adminOwner }, id, { action: "unlist", reason: "测试下架" });
+    const missing = await lifeChange(request("POST", cookies.owner, { expectedVersion: await version(id), to: "RETIRED", reason: "退役" }), context(id));
+    expect(missing.status).toBe(422);
+    await lifecycle(id, "RETIRED");
+    const [stored] = await db.select().from(applications).where(eq(applications.id, id));
+    expect(stored.publishedRevisionId).toBe(revision.id); expect(stored.listingStatus).toBe("UNLISTED");
+    const events = await (await getEvents(request("GET", cookies.owner), context(id))).json();
+    expect(events.items[0]).toMatchObject({ action: "TRANSITIONED", afterState: { lifecycleStatus: "RETIRED", impactAcknowledged: true, impactSource: "MANUAL_ATTESTATION", externalImpact: "UNKNOWN" } });
+    await lifecycle(id, "DEPRECATED", "owner", false, 403);
+    await lifecycle(id, "DEPRECATED", "admin", true);
+    expect((await read(id)).components[0].archivedAt).not.toBeNull();
+    expect((await db.select().from(applications).where(eq(applications.id, id)))[0].listingStatus).toBe("UNLISTED");
+  });
+  it("freezes every legacy market write including direct calls and DB relisting", async () => {
+    const { id, revision } = await readyForRetirement();
+    await lifecycle(id, "RETIRED");
+    for (const operation of [() => editDraft({ id: ids.owner }, id, { name: "Bypass" }), () => openNewDraft({ id: ids.owner }, id), () => submitDraft({ id: ids.owner }, id), () => reviewRevision({ id: ids.adminOwner }, revision.id, "APPROVED"), () => manageListing({ id: ids.adminOwner }, id, { action: "relist", reason: "绕过" })]) await expect(operation()).rejects.toMatchObject({ status: 409, code: "application_retired" });
+    await expect(db.update(applications).set({ listingStatus: "LISTED" }).where(eq(applications.id, id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await lifecycle(id, "ACTIVE", "owner", false, 403);
+  });
+  it("rechecks retirement under the same lock against assets and relisting races", async () => {
+    const first = await readyForRetirement();
+    const results = await Promise.all([
+      lifeChange(request("POST", cookies.owner, { expectedVersion: 1, to: "RETIRED", reason: "退役", impactAcknowledged: true }), context(first.id)),
+      postAsset(request("POST", cookies.owner, { expectedVersion: 1, key: "api", name: "API" }), context(first.id)),
+    ]);
+    expect(results.map(r => r.status).filter(status => status < 300)).toHaveLength(1);
+    expect(results.some(r => r.status === 409)).toBe(true);
+    const second = await readyForRetirement();
+    const raced = await Promise.all([
+      lifeChange(request("POST", cookies.owner, { expectedVersion: 1, to: "RETIRED", reason: "退役", impactAcknowledged: true }), context(second.id)).then(response => response.status),
+      manageListing({ id: ids.adminOwner }, second.id, { action: "relist", reason: "测试恢复上架" }).then(() => 200, error => { if (error.status !== 409) throw error; return 409; }),
+    ]);
+    expect(raced.sort()).toEqual([200, 409]);
+    const [stored] = await db.select().from(applications).where(eq(applications.id, second.id));
+    expect(stored.lifecycleStatus === "RETIRED" && stored.listingStatus === "LISTED").toBe(false);
+    const third = await readyForRetirement();
+    const oldVersion = await version(third.id);
+    await create(third.id, "components", { key: "new", name: "New" });
+    await lifecycle(third.id, "RETIRED", "owner", false, 409, oldVersion);
+  });
+  it("allows draft takeover but preserves both original creator and current owner self-review bans", async () => {
+    const id = await app();
+    // Original creator is an admin to exercise both sides of the self-review rule.
+    await db.update(user).set({ role: "admin" }).where(eq(user.id, ids.owner));
+    try {
+      const transfer = await ownerTransfer(request("POST", cookies.admin, { expectedVersion: 1, newOwnerId: ids.adminOwner, reason: "负责人接管草稿" }), context(id));
+      expect(transfer.status).toBe(200);
+      expect((await getAssets(request("GET", cookies.owner), context(id))).status).toBe(404);
+      const [revision] = await db.select().from(appRevisions).where(eq(appRevisions.appId, id));
+      expect(revision.createdBy).toBe(ids.owner);
+      await editDraft({ id: ids.adminOwner }, id, { name: "移交后编辑", summary: "已接管", description: "测试", category: "other", targetUrl: "https://example.test/new" });
+      await submitDraft({ id: ids.adminOwner }, id);
+      await expect(reviewRevision({ id: ids.adminOwner }, revision.id, "APPROVED")).rejects.toMatchObject({ status: 403, code: "self_review_forbidden" });
+      await expect(reviewRevision({ id: ids.owner }, revision.id, "APPROVED")).rejects.toMatchObject({ status: 403, code: "self_review_forbidden" });
+      await db.update(user).set({ canCreateApp: true }).where(eq(user.email, "t01-admin@example.test"));
+      // Independent admin may review even while target owns the application.
+      const [admin] = await db.select().from(user).where(eq(user.email, "t01-admin@example.test"));
+      await reviewRevision({ id: admin.id }, revision.id, "APPROVED");
+    } finally {
+      await db.update(user).set({ role: "user" }).where(eq(user.id, ids.owner));
+      await db.update(user).set({ canCreateApp: false }).where(eq(user.email, "t01-admin@example.test"));
+    }
+  });
+  it("denies owner transfers to ineligible accounts, pending revisions and non-admins", async () => {
+    const id = await app();
+    const body = { expectedVersion: 1, newOwnerId: ids.other, reason: "移交" };
+    expect((await ownerTransfer(request("POST", cookies.owner, body), context(id))).status).toBe(403);
+    for (const target of ["missing", ids.disabled, ids.first, ids.employee]) expect((await ownerTransfer(request("POST", cookies.admin, { ...body, newOwnerId: target }), context(id))).status).toBe(422);
+    await db.update(appRevisions).set({ status: "PENDING" }).where(eq(appRevisions.appId, id));
+    expect((await ownerTransfer(request("POST", cookies.admin, body), context(id))).status).toBe(409);
+    expect(await version(id)).toBe(1);
+    await db.update(appRevisions).set({ status: "REJECTED" }).where(eq(appRevisions.appId, id));
+    expect((await ownerTransfer(request("POST", cookies.admin, body), context(id))).status).toBe(200);
+    expect((await ownerTransfer(request("POST", cookies.admin, body), context(id))).status).toBe(409);
+  });
+  it("rolls lifecycle and transfer back on audit failure", async () => {
+    const { id } = await readyForRetirement();
+    await db.execute(sql`CREATE FUNCTION p1_fail_audit() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'fixture audit failure'; END; $$ LANGUAGE plpgsql`);
+    await db.execute(sql`CREATE TRIGGER p1_fail_audit BEFORE INSERT ON asset_events FOR EACH ROW EXECUTE FUNCTION p1_fail_audit()`);
+    try {
+      const retired = await lifeChange(request("POST", cookies.owner, { expectedVersion: 1, to: "RETIRED", reason: "退役", impactAcknowledged: true }), context(id));
+      expect(retired.status).toBe(500);
+      const transferred = await ownerTransfer(request("POST", cookies.admin, { expectedVersion: 1, newOwnerId: ids.other, reason: "移交" }), context(id));
+      expect(transferred.status).toBe(500);
+      const [stored] = await db.select().from(applications).where(eq(applications.id, id));
+      expect(stored.lifecycleStatus).toBe("DEPRECATED"); expect(stored.ownerUserId).toBe(ids.owner); expect(stored.assetVersion).toBe(1);
+    } finally { await db.execute(sql`DROP TRIGGER p1_fail_audit ON asset_events`); await db.execute(sql`DROP FUNCTION p1_fail_audit()`); }
+  });
+  it("serializes owner transfer against old-owner writes, and approval against retirement", async () => {
+    const id = await app();
+    const transferRace = await Promise.all([
+      ownerTransfer(request("POST", cookies.admin, { expectedVersion: 1, newOwnerId: ids.other, reason: "并发移交" }), context(id)),
+      postAsset(request("POST", cookies.owner, { expectedVersion: 1, key: "raced", name: "Raced" }), context(id)),
+    ]);
+    expect(transferRace.filter(response => response.status < 300)).toHaveLength(1);
+    const statuses = transferRace.map(response => response.status).sort();
+    expect([[200, 404], [201, 409]]).toContainEqual(statuses);
+    const { id: reviewApp, revision } = await readyForRetirement();
+    await db.update(appRevisions).set({ status: "PENDING" }).where(eq(appRevisions.id, revision.id));
+    const retirement = lifeChange(request("POST", cookies.owner, { expectedVersion: 1, to: "RETIRED", reason: "退役", impactAcknowledged: true }), context(reviewApp));
+    const approval = reviewRevision({ id: ids.adminOwner }, revision.id, "APPROVED");
+    const [retireResponse] = await Promise.all([retirement, approval]);
+    expect(retireResponse.status).toBe(409);
+    const [stored] = await db.select().from(applications).where(eq(applications.id, reviewApp));
+    expect(stored.lifecycleStatus).toBe("DEPRECATED"); expect(stored.listingStatus).toBe("LISTED");
+  });
+
 });

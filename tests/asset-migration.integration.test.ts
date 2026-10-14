@@ -44,7 +44,7 @@ describe("P1 additive migration from the legacy schema", () => {
         return result;
       }
       const before = await snapshot();
-      const migration = readFileSync("drizzle/" + files.find(file => file.startsWith("0005_"))!, "utf8");
+      const migration = files.filter(file => Number(file.slice(0, 4)) >= 5).map(file => readFileSync("drizzle/" + file, "utf8")).join("\n");
       // Failure after all DDL: PostgreSQL must preserve the entire old schema/data.
       await client.query("BEGIN"); await client.query(migration);
       await expect(client.query("SELECT 1/0")).rejects.toMatchObject({ code: "22012" });
