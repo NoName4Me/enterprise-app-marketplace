@@ -10,7 +10,6 @@ import { getCommunity } from "@/domain/community-service";
 import { CommunityPanel } from "./community-panel";
 import { RequestAccessPanel } from "./request-access-panel";
 import { myAppAccessRequest } from "@/domain/access-request-service";
-import Link from "next/link";
 import { FavoriteButton } from "@/app/components/favorite-button";
 import { AppIcon } from "@/app/components/app-icon";
 
