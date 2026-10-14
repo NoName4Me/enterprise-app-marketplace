@@ -67,7 +67,7 @@ export const accountRelations = relations(account, ({ one }) => ({
   user: one(user, { fields: [account.userId], references: [user.id] }),
 }));
 
-import { check, integer, uuid, uniqueIndex, unique } from "drizzle-orm/pg-core";
+import { check, integer, uuid, uniqueIndex, unique, foreignKey } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 // T02: catalog identity and immutable review snapshots are separate entities.
@@ -79,11 +79,18 @@ export const applications = pgTable("applications", {
   listingStatus: text("listing_status", { enum: ["UNLISTED", "LISTED"] }).notNull().default("UNLISTED"),
   publishedRevisionId: uuid("published_revision_id"),
   featured: boolean("featured").notNull().default(false),
+  assetVersion: integer("asset_version").notNull().default(1),
+  lifecycleStatus: text("lifecycle_status", { enum: ["UNKNOWN", "PILOT", "ACTIVE", "DEPRECATED", "RETIRED"] }).notNull().default("UNKNOWN"),
+  responsibleTeamName: text("responsible_team_name"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   check("application_listing_status_check", sql`${t.listingStatus} IN ('UNLISTED','LISTED')`),
   check("application_public_pointer_check", sql`${t.listingStatus} <> 'LISTED' OR ${t.publishedRevisionId} IS NOT NULL`),
+  check("application_asset_version_positive", sql`${t.assetVersion} > 0`),
+  check("application_lifecycle_check", sql`${t.lifecycleStatus} IN ('UNKNOWN','PILOT','ACTIVE','DEPRECATED','RETIRED')`),
+  check("application_retired_unlisted", sql`${t.lifecycleStatus} <> 'RETIRED' OR ${t.listingStatus} = 'UNLISTED'`),
+  check("application_team_length", sql`length(${t.responsibleTeamName}) BETWEEN 1 AND 100`),
   index("applications_owner_idx").on(t.ownerUserId),
 ]);
 
@@ -180,3 +187,80 @@ export const authRateLimits = pgTable("auth_rate_limits", {
   count: integer("count").notNull(),
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 }, table => [index("auth_rate_limits_time_idx").on(table.lastRequest)]);
+
+// P1-A: private asset registration. No runtime credentials or collected status.
+const assetTimes = () => ({
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+});
+export const appComponents = pgTable("app_components", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  appId: uuid("app_id").notNull().references(() => applications.id, { onDelete: "restrict" }),
+  key: text("key").notNull(), name: text("name").notNull(),
+  notes: text("notes").notNull().default(""), ...assetTimes(),
+}, t => [
+  unique("component_app_key_unique").on(t.appId, t.key),
+  unique("component_app_id_unique").on(t.appId, t.id),
+  check("component_key_check", sql`${t.key} ~ '^[a-z0-9][a-z0-9-]{0,63}$'`),
+  check("component_text_check", sql`length(${t.name}) BETWEEN 1 AND 120 AND length(${t.notes}) <= 1000`),
+]);
+export const appEnvironments = pgTable("app_environments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  appId: uuid("app_id").notNull().references(() => applications.id, { onDelete: "restrict" }),
+  key: text("key").notNull(), name: text("name").notNull(),
+  purpose: text("purpose", { enum: ["DEVELOPMENT", "TEST", "PRODUCTION"] }).notNull(),
+  notes: text("notes").notNull().default(""), ...assetTimes(),
+}, t => [
+  unique("environment_app_key_unique").on(t.appId, t.key),
+  unique("environment_app_id_unique").on(t.appId, t.id),
+  check("environment_key_check", sql`${t.key} ~ '^[a-z0-9][a-z0-9-]{0,63}$'`),
+  check("environment_text_check", sql`length(${t.name}) BETWEEN 1 AND 120 AND length(${t.notes}) <= 1000`),
+  check("environment_purpose_check", sql`${t.purpose} IN ('DEVELOPMENT','TEST','PRODUCTION')`),
+]);
+export const componentEnvironments = pgTable("component_environments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  appId: uuid("app_id").notNull().references(() => applications.id, { onDelete: "restrict" }),
+  componentId: uuid("component_id").notNull(), environmentId: uuid("environment_id").notNull(),
+  ...assetTimes(),
+}, t => [
+  unique("binding_app_pair_unique").on(t.appId, t.componentId, t.environmentId),
+  unique("binding_app_component_id_unique").on(t.appId, t.componentId, t.id),
+  foreignKey({ name: "binding_component_fk", columns: [t.appId, t.componentId], foreignColumns: [appComponents.appId, appComponents.id] }).onDelete("restrict"),
+  foreignKey({ name: "binding_environment_fk", columns: [t.appId, t.environmentId], foreignColumns: [appEnvironments.appId, appEnvironments.id] }).onDelete("restrict"),
+]);
+export const externalReferences = pgTable("external_references", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  appId: uuid("app_id").notNull().references(() => applications.id, { onDelete: "restrict" }),
+  componentId: uuid("component_id").notNull(), bindingId: uuid("binding_id"),
+  provider: text("provider", { enum: ["GITHUB"] }).notNull().default("GITHUB"),
+  resourceKind: text("resource_kind", { enum: ["REPOSITORY", "WORKFLOW"] }).notNull(),
+  repositoryFullName: text("repository_full_name").notNull(), workflowId: text("workflow_id"),
+  ...assetTimes(),
+}, t => [
+  foreignKey({ name: "reference_component_fk", columns: [t.appId, t.componentId], foreignColumns: [appComponents.appId, appComponents.id] }).onDelete("restrict"),
+  foreignKey({ name: "reference_binding_fk", columns: [t.appId, t.componentId, t.bindingId], foreignColumns: [componentEnvironments.appId, componentEnvironments.componentId, componentEnvironments.id] }).onDelete("restrict"),
+  unique("reference_identity_unique").on(t.appId, t.componentId, t.bindingId, t.resourceKind, t.repositoryFullName, t.workflowId).nullsNotDistinct(),
+  check("reference_provider_check", sql`${t.provider} = 'GITHUB'`),
+  check("reference_repository_check", sql`${t.repositoryFullName} ~ '^[a-z0-9][a-z0-9-]{0,38}/[a-z0-9_.-]{1,100}$' AND split_part(${t.repositoryFullName}, '/', 2) NOT IN ('.','..')`),
+  check("reference_kind_check", sql`(${t.resourceKind} = 'REPOSITORY' AND ${t.workflowId} IS NULL) OR (${t.resourceKind} = 'WORKFLOW' AND ${t.workflowId} ~ '^[1-9][0-9]{0,19}$' AND ${t.workflowId} IS NOT NULL)`),
+  index("references_binding_idx").on(t.appId, t.bindingId),
+]);
+export const assetEvents = pgTable("asset_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  appId: uuid("app_id").notNull().references(() => applications.id, { onDelete: "restrict" }),
+  actorUserId: text("actor_user_id").notNull().references(() => user.id, { onDelete: "restrict" }),
+  action: text("action", { enum: ["CREATED", "UPDATED", "ARCHIVED", "RESTORED", "TRANSITIONED", "OWNER_TRANSFERRED"] }).notNull(),
+  resourceType: text("resource_type", { enum: ["application", "components", "environments", "bindings", "references"] }).notNull(),
+  resourceId: uuid("resource_id").notNull(),
+  beforeState: jsonb("before_state"), afterState: jsonb("after_state"),
+  reason: text("reason"),
+  assetVersionAfter: integer("asset_version_after").notNull(),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [
+  unique("asset_event_version_unique").on(t.appId, t.assetVersionAfter),
+  check("asset_event_action_check", sql`${t.action} IN ('CREATED','UPDATED','ARCHIVED','RESTORED','TRANSITIONED','OWNER_TRANSFERRED')`),
+  check("asset_event_reason_check", sql`length(${t.reason}) BETWEEN 1 AND 500`),
+  check("asset_event_resource_check", sql`${t.resourceType} IN ('application','components','environments','bindings','references')`),
+  check("asset_event_version_check", sql`${t.assetVersionAfter} > 1`),
+]);

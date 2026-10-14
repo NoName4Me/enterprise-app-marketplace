@@ -133,6 +133,7 @@ export async function manageListing(actor: Actor | null, appId: string, body: Re
   return db.transaction(async tx => {
     const [app] = await tx.select().from(applications).where(eq(applications.id, appId)).for("update");
     if (!app || !app.publishedRevisionId) throw new AppError(404, "not_found");
+    if (app.lifecycleStatus === "RETIRED") throw new AppError(409, "application_retired");
     if (body.action === "feature") {
       if (typeof body.featured !== "boolean" || app.listingStatus !== "LISTED") throw new AppError(422, "invalid_body");
       await tx.update(applications).set({ featured: body.featured }).where(eq(applications.id, appId));

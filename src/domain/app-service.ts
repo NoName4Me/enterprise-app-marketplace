@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { applications, appRevisions, reviewEvents, appFavorites, appFeedback } from "@/db/schema";
+import { applications, appRevisions, reviewEvents, appFavorites, appFeedback, user } from "@/db/schema";
 import { authorizeActor, type Actor } from "./actor";
 import { AppError } from "./app-errors";
 import { validateContent, type AppContent } from "./app-validation";
@@ -46,7 +46,7 @@ export async function createApplication(actor: Actor | null, fields: Record<stri
 export async function listOwnedApplications(actor: Actor | null) {
   const owner = await authorizeActor(actor, "active");
   const apps = await db.select({
-    id: applications.id, listingStatus: applications.listingStatus,
+    id: applications.id, lifecycleStatus: applications.lifecycleStatus, listingStatus: applications.listingStatus,
     publishedRevisionId: applications.publishedRevisionId,
   }).from(applications).where(eq(applications.ownerUserId, owner.id))
     .orderBy(desc(applications.createdAt)).limit(50);
@@ -76,7 +76,7 @@ export async function getOwnedApplication(actor: Actor | null, appId: string) {
   if (!app) throw new AppError(404, "not_found");
   const revisions = await db.select().from(appRevisions)
     .where(eq(appRevisions.appId, app.id)).orderBy(desc(appRevisions.sequence));
-  return { id: app.id, listingStatus: app.listingStatus,
+  return { id: app.id, lifecycleStatus: app.lifecycleStatus, listingStatus: app.listingStatus,
     publishedRevisionId: app.publishedRevisionId,
     revisions: revisions.map((r) => ({
       id: r.id, sequence: r.sequence, status: r.status, ...contentFromRevision(r),
@@ -95,6 +95,7 @@ export async function editDraft(
     const [app] = await tx.select().from(applications)
       .where(eq(applications.id, appId)).for("update");
     if (!app || app.ownerUserId !== owner.id) throw new AppError(404, "not_found");
+    if (app.lifecycleStatus === "RETIRED") throw new AppError(409, "application_retired");
 
     const [draft] = await tx.select().from(appRevisions)
       .where(and(eq(appRevisions.appId, appId), eq(appRevisions.status, "DRAFT")))
@@ -114,6 +115,7 @@ export async function openNewDraft(actor: Actor | null, appId: string) {
     const [app] = await tx.select().from(applications)
       .where(eq(applications.id, appId)).for("update");
     if (!app || app.ownerUserId !== owner.id) throw new AppError(404, "not_found");
+    if (app.lifecycleStatus === "RETIRED") throw new AppError(409, "application_retired");
 
     const [latest] = await tx.select().from(appRevisions)
       .where(eq(appRevisions.appId, appId))
@@ -139,6 +141,7 @@ export async function submitDraft(actor: Actor | null, appId: string) {
     const [app] = await tx.select().from(applications)
       .where(eq(applications.id, appId)).for("update");
     if (!app || app.ownerUserId !== owner.id) throw new AppError(404, "not_found");
+    if (app.lifecycleStatus === "RETIRED") throw new AppError(409, "application_retired");
     const [draft] = await tx.select().from(appRevisions)
       .where(and(eq(appRevisions.appId, appId), eq(appRevisions.status, "DRAFT")))
       .limit(1).for("update");
@@ -191,11 +194,14 @@ export async function reviewRevision(
     const [app] = await tx.select().from(applications)
       .where(eq(applications.id, candidate.appId)).for("update");
     if (!app) throw new AppError(404, "not_found");
+    if (app.lifecycleStatus === "RETIRED") throw new AppError(409, "application_retired");
+    await tx.select({ id: user.id }).from(user).where(eq(user.id, reviewer.id)).for("share");
+    await authorizeActor(actor, "review", tx);
     const [revision] = await tx.select().from(appRevisions)
       .where(eq(appRevisions.id, revisionId)).for("update");
     if (!revision || revision.appId !== app.id) throw new AppError(404, "not_found");
     if (revision.status !== "PENDING") throw new AppError(409, "already_reviewed");
-    if (revision.createdBy === reviewer.id) throw new AppError(403, "self_review_forbidden");
+    if (revision.createdBy === reviewer.id || app.ownerUserId === reviewer.id) throw new AppError(403, "self_review_forbidden");
 
     const [changed] = await tx.update(appRevisions).set({
       status: verdict, reviewedBy: reviewer.id, reviewedAt: new Date(),

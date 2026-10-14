@@ -7,6 +7,8 @@ import { AppError } from "@/domain/app-errors";
 import { getPageUser } from "@/lib/page-user";
 import { mayCreateApp } from "@/lib/access";
 import { categoryNames, statusName } from "@/lib/marketplace-labels";
+import { AssetWorkspace } from "@/app/components/asset-workspace";
+import { lifecycleName } from "@/lib/marketplace-labels";
 import { ApplicationForm } from "../application-form";
 import { RevisionAction } from "../revision-action";
 
@@ -24,11 +26,14 @@ export default async function ManagedApplication({
     throw error;
   }
   const latest = data.revisions[0];
-  const canWrite = mayCreateApp(current);
+  const canWrite = mayCreateApp(current) && data.lifecycleStatus !== "RETIRED";
   return <SiteNav user={current} title={latest?.name || "应用详情"}>
     <p><Link href="/my/apps">← 返回我的应用</Link></p>
-    <p className="notice">市场状态：{data.listingStatus === "LISTED" ? "已上架" : "未上架"}；最新申请：{statusName(latest.status)}</p>
+    <p className="notice">市场状态：{data.listingStatus === "LISTED" ? "已上架" : "未上架"}；最新申请：{statusName(latest.status)}；生命周期：{lifecycleName(data.lifecycleStatus)}</p>
     {data.listingStatus === "LISTED" && <p><Link href={`/apps/${id}`}>查看应用市场中的当前版本</Link></p>}
+    <nav className="asset-section-nav" aria-label="应用分区"><a href="#registration">市场登记</a><a href="#assets">应用资产</a><a href="#lifecycle">生命周期与审计</a></nav>
+    <section id="registration">
+    {data.lifecycleStatus === "RETIRED" && <p className="notice">应用已退役，登记内容只读。请联系管理员恢复。</p>}
     {latest.status === "DRAFT" && canWrite && <ApplicationForm mode="edit" appId={id} initial={latest}/>}
     {latest.status === "DRAFT" && !canWrite && <p className="notice">创建权限已撤销，只能查看历史，不能修改或提交。</p>}
     {latest.status === "PENDING" && <p className="notice">审核中：本版本不可修改，已上架应用仍展示原版本。</p>}
@@ -46,5 +51,7 @@ export default async function ManagedApplication({
         {revision.rejectionReason && <p className="error">驳回原因：{revision.rejectionReason}</p>}
       </section>)}
     </div>
+    </section>
+    <AssetWorkspace actor={{ id: current.id }} appId={id} canWrite={mayCreateApp(current)} />
   </SiteNav>;
 }
