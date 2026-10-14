@@ -1,0 +1,33 @@
+name: P4 - Open GitOps promotion PR
+on:
+  workflow_dispatch:
+    inputs:
+      publication_run_id:
+        required: true
+        type: string
+      variant:
+        required: true
+        type: choice
+        options: [healthy, unhealthy]
+permissions:
+  contents: write
+  actions: read
+  pull-requests: write
+jobs:
+  promote-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: dev
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify trusted artifact and open GitOps PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH_RUN_ID: ${{ inputs.publication_run_id }}
+          VARIANT: ${{ inputs.variant }}
+        run: |
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          node scripts/p4-open-promotion.mjs "$PUBLISH_RUN_ID" "$VARIANT"

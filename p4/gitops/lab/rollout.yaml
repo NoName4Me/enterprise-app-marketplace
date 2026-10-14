@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: marketplace-lab
+  namespace: marketplace-lab
+  labels:
+    app.kubernetes.io/name: marketplace-lab
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: marketplace-lab
+  template:
+    metadata:
+      labels:
+        app: marketplace-lab
+    spec:
+      containers:
+        - name: lab
+          image: ghcr.io/noname4me/enterprise-app-marketplace-lab@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 3
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 25m
+              memory: 48Mi
+            limits:
+              cpu: 300m
+              memory: 128Mi
+  strategy:
+    blueGreen:
+      activeService: marketplace-lab-active
+      previewService: marketplace-lab-preview
+      autoPromotionEnabled: false
+      scaleDownDelaySeconds: 30
