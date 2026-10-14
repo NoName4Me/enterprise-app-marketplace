@@ -9,6 +9,11 @@ function requireValue(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+export function verifyLocalTarget({ platform, architecture, context, endpoint, dockerHostOverride }) {
+  requireValue(platform === "darwin" && architecture === "arm64", "Deploy only from the local Apple Silicon Mac.");
+  requireValue(context === "orbstack" && endpoint?.startsWith("unix://") && !dockerHostOverride, "Expected local OrbStack socket; remote Docker or DOCKER_HOST override is forbidden.");
+}
+
 export function verifyCI(run, jobs, expectedSHA) {
   requireValue(SHA.test(expectedSHA), "Invalid source SHA.");
   requireValue(run.repository?.full_name === REPOSITORY && run.head_repository?.full_name === REPOSITORY, "Foreign CI repository.");
