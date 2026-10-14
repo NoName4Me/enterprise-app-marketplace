@@ -69,6 +69,11 @@ jobs:
           pnpm lint
           pnpm test
           pnpm build
+      - name: Verify local lab service and Compose isolation
+        run: |
+          node --test lab/test-service/server.test.mjs
+          node lab/init-env.mjs
+          docker compose -p marketplace-lab --env-file lab/.env -f compose.yaml -f lab/compose.yaml config --quiet
       - name: Install Chromium for end-to-end tests
         run: pnpm exec playwright install --with-deps chromium
       - name: Browser end-to-end journey

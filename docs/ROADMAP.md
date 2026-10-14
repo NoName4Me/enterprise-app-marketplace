@@ -2,6 +2,8 @@
 
 更新时间：2026-10-13。**P0–P8 为规划优先级，不代表已实现或强制逐项串行；一个阶段未满足验收不可虚报完成。**
 
+> 2026-10-14 执行补充：P0-T01 [PR #15](https://github.com/NoName4Me/enterprise-app-marketplace/pull/15) 全量 CI PASS；P0-T02 [PR #16](https://github.com/NoName4Me/enterprise-app-marketplace/pull/16) 安全代码通过，真实分支保护仍 BLOCKED；LAB-T00/T01 已在 OrbStack 本机实测，GHCR/digest LAB-T02 未执行。见 [门禁证据](engineering/P0_T02.md) 与 [本机证据](engineering/LAB_T01.md)。下文“最新 CI 失败”为10月13日规划时观察值。
+
 ## 当前已具备的事实与限制
 
 原 MVP 已实现账户与应用登记、审核/上架、员工浏览、版本复审、收藏、评价和讨论等基础能力；场景找应用只有关键词基线。Docker standalone 在部分历史 CI 已做过容器烟测，但**没有正式生产部署**。最新 `master` 的 [CI 运行 38386790784](https://github.com/NoName4Me/enterprise-app-marketplace/actions/runs/38386790784) 仍在 `Bootstrap initial administrator` 失败，导致后续测试没有全部执行；之前通过的报告不代表当前版本已经绿灯。
