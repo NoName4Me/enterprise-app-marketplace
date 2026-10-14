@@ -104,8 +104,10 @@ Loki 使用单体、短期保留和本地文件存储，非高可用。Grafana L
     ARGOCD_ALLOWED_PROJECTS=marketplace-lab
     PROMETHEUS_SERVER_URL=http://127.0.0.1:9090
     LOKI_SERVER_URL=http://127.0.0.1:3100
-    AIOPS_OLLAMA_URL=http://127.0.0.1:11434
-    AIOPS_MODEL=<本地已安装模型>
+    DEEPSEEK_API_KEY=<服务端密钥>
+    AIOPS_LLM_BASE_URL=https://api.deepseek.com
+    AIOPS_LLM_MODEL=deepseek-flash
+    AIOPS_LLM_SEND_LOGS=false
 
 注意：如果 Next.js 在 Docker 容器里运行，localhost 指向容器自身，不能直接照抄 Mac 的 localhost。Argo 自签名 HTTPS 需要受信证书/代理，严禁 NODE_TLS_REJECT_UNAUTHORIZED=0。
 
@@ -144,7 +146,7 @@ Loki 使用单体、短期保留和本地文件存储，非高可用。Grafana L
 
 再为账号 portal 配置 marketplace-lab/* 范围的 applications,get RBAC，并使用 argocd account generate-token --account portal 获取 Token。不要覆盖已有的 argocd-rbac-cm.policy.csv；应追加一条角色策略和账号映射。查询失败通常是 Token 权限不足、服务端无法连通或 Argo Application 标签/Project 映射不一致。
 
-目前 AI 只读诊断要求本机 Ollama（/api/chat 协议）及 AIOPS_MODEL。未安装模型时按钮显示 NOT_CONNECTED；模型分析只是建议，不能当成已完成自动修复。
+目前 AI 只读诊断要求云端大模型 API（/api/chat 协议）及 AIOPS_MODEL。未安装模型时按钮显示 NOT_CONNECTED；模型分析只是建议，不能当成已完成自动修复。
 
 ## 11. 生效版本判定
 
@@ -159,3 +161,7 @@ Argo CD 内建 Rollout 资源动作 promote-full、abort；门户测试环境内
 ## 13. 告警验收
 
 门户只读取 Prometheus /api/v1/alerts，并严格筛选专用 marketplace-lab namespace 的 alert，不替代 Alertmanager。示例 PrometheusRule 在 active 实例持续 30 秒报告 marketplace_lab_health==0 时告警；不健康预览版通常不会进入 active Service，所以应以 Argo Rollout 的异常和 ready 状态验证其被阻断。告警 API 暂时不可达显示 UNKNOWN，而不是无告警。
+
+## 云端模型信息边界
+
+P4 不安装 Ollama。DeepSeek 默认使用 https://api.deepseek.com/chat/completions；也可用任意受信、兼容 OpenAI Chat Completions 的 HTTPS 服务商 URL 配置 AIOPS_LLM_BASE_URL（不用填 /chat/completions 后缀）。仅服务器端读取密钥，默认只发送 Argo/GitHub 概要、Prometheus 指标和告警；原始 Loki 日志**默认不发送**，避免员工数据及 Token 外流。按需显式启用 AIOPS_LLM_SEND_LOGS=true 前先检查脱敏策略。

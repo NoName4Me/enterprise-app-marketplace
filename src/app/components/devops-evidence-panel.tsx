@@ -45,7 +45,7 @@ export function DevopsEvidencePanel({ root }: { root: string }) {
   }
   return <section id="devops" className="card asset-group" aria-label="AI DevOps 运行分析">
     <h3>AI DevOps · 运行证据与诊断</h3>
-    <p className="muted">只读汇总该应用的 Argo CD、GitHub、Prometheus 和 Loki。AI 分析使用显式配置的本地 Ollama，不执行代码修改或发布。</p>
+    <p className="muted">只读汇总该应用的 Argo CD、GitHub、Prometheus 和 Loki。AI 分析使用显式配置的云端大模型 API，不执行代码修改或发布。</p>
     <div className="actions">
       <button className="button-secondary" type="button" disabled={!!busy} onClick={() => void load("evidence")}>
         {busy === "evidence" ? "读取中…" : "读取运维证据"}
