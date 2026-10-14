@@ -312,6 +312,7 @@ export const requirements = pgTable("requirements", {
   type: text("type", { enum: ["NEW_APP","FEATURE","BUG","IMPROVEMENT"] }).notNull(),
   title: text("title").notNull(), description: text("description").notNull(),
   status: text("status", { enum: ["OPEN","IN_PROGRESS","DONE","REJECTED"] }).default("OPEN").notNull(),
+  assignedTo: text("assigned_to").references(() => user.id, { onDelete: "restrict" }),
   githubIssueUrl: text("github_issue_url"), githubPrUrl: text("github_pr_url"),
   resolution: text("resolution"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

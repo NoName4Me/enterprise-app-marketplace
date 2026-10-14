@@ -21,6 +21,7 @@ export default async function RequirementDetail({params}:{params:Promise<{id:str
       {item.appId&&<p><Link href={"/apps/"+item.appId}>{item.appName??"关联应用"}</Link></p>}
       {item.githubIssueUrl&&<p><a href={item.githubIssueUrl} target="_blank" rel="noopener noreferrer">GitHub Issue</a></p>}
       {item.githubPrUrl&&<p><a href={item.githubPrUrl} target="_blank" rel="noopener noreferrer">GitHub PR</a></p>}
+      {item.handlerName&&<p className="muted">当前登记处理人：{item.handlerName}</p>}
       {item.resolution&&<p className="notice">人工处理结论：{item.resolution}</p>}
     </section>
     <RequirementActions requirementId={id} canManage={item.canManage} initial={item}/>

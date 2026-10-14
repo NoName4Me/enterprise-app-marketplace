@@ -1,8 +1,10 @@
-CREATE TABLE "requirements" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,"app_id" uuid,"created_by" text NOT NULL,"type" text NOT NULL,"title" text NOT NULL,"description" text NOT NULL,"status" text DEFAULT 'OPEN' NOT NULL,"github_issue_url" text,"github_pr_url" text,"resolution" text,"created_at" timestamp with time zone DEFAULT now() NOT NULL,"updated_at" timestamp with time zone DEFAULT now() NOT NULL);
+CREATE TABLE "requirements" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,"app_id" uuid,"created_by" text NOT NULL,"type" text NOT NULL,"title" text NOT NULL,"description" text NOT NULL,"status" text DEFAULT 'OPEN' NOT NULL,"assigned_to" text,"github_issue_url" text,"github_pr_url" text,"resolution" text,"created_at" timestamp with time zone DEFAULT now() NOT NULL,"updated_at" timestamp with time zone DEFAULT now() NOT NULL);
 --> statement-breakpoint
 ALTER TABLE "requirements" ADD CONSTRAINT "requirements_app_id_applications_id_fk" FOREIGN KEY ("app_id") REFERENCES "public"."applications"("id") ON DELETE restrict;
 --> statement-breakpoint
 ALTER TABLE "requirements" ADD CONSTRAINT "requirements_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE restrict;
+--> statement-breakpoint
+ALTER TABLE "requirements" ADD CONSTRAINT "requirements_assigned_to_user_id_fk" FOREIGN KEY ("assigned_to") REFERENCES "public"."user"("id") ON DELETE restrict;
 --> statement-breakpoint
 CREATE INDEX "requirements_app_idx" ON "requirements" ("app_id", "created_at");
 --> statement-breakpoint

@@ -29,7 +29,7 @@ async function rowOf(requirementId: string) {
   const [row] = await db.select({
     id: requirements.id, appId: requirements.appId, createdBy: requirements.createdBy,
     type: requirements.type, title: requirements.title, description: requirements.description,
-    status: requirements.status, githubIssueUrl: requirements.githubIssueUrl,
+    status: requirements.status, assignedTo: requirements.assignedTo, githubIssueUrl: requirements.githubIssueUrl,
     githubPrUrl: requirements.githubPrUrl, resolution: requirements.resolution,
     createdAt: requirements.createdAt, updatedAt: requirements.updatedAt,
     appListed: applications.listingStatus, ownerId: applications.ownerUserId,
@@ -82,13 +82,14 @@ export async function getRequirement(actor: Actor | null, requirementId: string)
   if (!row || !readable(row, current.id, current.role)) throw new AppError(404, "not_found");
   const canManage = (row.appId ? row.ownerId === current.id : false) ||
     current.role?.split(",").includes("admin") === true;
+  const handlerName = row.assignedTo ? (await db.select({ name: user.name }).from(user).where(eq(user.id, row.assignedTo)).limit(1))[0]?.name ?? null : null;
   const comments = await db.select({ id: requirementComments.id, body: requirementComments.body,
     at: requirementComments.createdAt, authorName: user.name })
     .from(requirementComments).innerJoin(user, eq(user.id, requirementComments.userId))
     .where(eq(requirementComments.requirementId, row.id))
     .orderBy(requirementComments.createdAt).limit(100);
   return { ...row, appName: row.appListed === "LISTED" || canManage || row.createdBy === current.id ? row.appName : null,
-    canManage, comments };
+    canManage, handlerName, comments };
 }
 export async function commentRequirement(actor: Actor | null, requirementId: string, body: Record<string, unknown>) {
   const current = await authorizeActor(actor, "active");
@@ -119,7 +120,8 @@ export async function updateRequirement(actor: Actor | null, requirementId: stri
         throw new AppError(403, "forbidden");
     } else if (!current.role?.split(",").includes("admin")) throw new AppError(403, "forbidden");
     const [updated] = await tx.update(requirements).set({
-      status, githubIssueUrl: githubUrl(body.githubIssueUrl, "issues"),
+      status, assignedTo: status === "IN_PROGRESS" || status === "DONE" ? current.id : null,
+      githubIssueUrl: githubUrl(body.githubIssueUrl, "issues"),
       githubPrUrl: githubUrl(body.githubPrUrl, "pull"), resolution, updatedAt: new Date(),
     }).where(eq(requirements.id, row.id)).returning({ id: requirements.id, status: requirements.status });
     return updated;
