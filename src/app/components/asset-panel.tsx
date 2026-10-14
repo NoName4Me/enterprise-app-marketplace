@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { explainError, lifecycleName } from "@/lib/marketplace-labels";
 import { GithubLivePanel } from "./github-live-panel";
 import { ArgoCDLivePanel } from "./argocd-live-panel";
+import { DevopsEvidencePanel } from "./devops-evidence-panel";
 
 type NamedAsset = { id: string; key: string; name: string; notes: string; archivedAt: string | null; purpose?: string };
 type Binding = { id: string; componentId: string; environmentId: string; archivedAt: string | null };
@@ -82,6 +83,7 @@ export function AssetPanel({ appId, initial, initialPreflight, initialEvents, ca
       </section>
       <GithubLivePanel key={data.assetVersion} root={root} registered={data.references.filter(ref => !ref.archivedAt).length} />
       <ArgoCDLivePanel key={data.assetVersion} root={root} registered={data.environments.filter(env => !env.archivedAt).length} />
+      <DevopsEvidencePanel root={root} />
     </section>
     <section id="lifecycle" className="card asset-group"><h2>生命周期与审计</h2><p>当前阶段：{lifecycleName(data.lifecycleStatus)}（人工登记）</p><p className="muted">生命周期独立于市场审核、运行健康和部署结果。变更不会部署或关停目标服务。</p><h3>退役检查</h3>{preflight.retirementBlockers.length ? <ul>{preflight.retirementBlockers.map(blocker => <li key={blocker}>{blockerNames[blocker] ?? blocker}</li>)}</ul> : <p>门户登记条件已满足；仍需人工核查外部影响。</p>}<p className="muted">外部依赖及运行影响：未知，未接入采集。执行时会重新核查条件。</p>
       {(admin || editable) && preflight.allowedTransitions.length > 0 && <form className="stack" key={data.assetVersion} onSubmit={event => save(event, "/lifecycle/transitions", "POST", form => ({ to: target, reason: form.get("reason"), ...(target === "RETIRED" ? { impactAcknowledged: form.get("impactAcknowledged") === "on" } : {}) }))}><label>目标生命周期<select value={target} onChange={event => setTarget(event.target.value)}>{preflight.allowedTransitions.map(value => <option value={value} key={value}>{lifecycleName(value)}</option>)}</select></label><label>生命周期变更理由<textarea name="reason" required maxLength={500} /></label>{target === "RETIRED" && <label className="asset-checkbox"><input name="impactAcknowledged" type="checkbox" required />我已人工核对使用者、外部依赖和目标系统处置；此声明不代表平台验证服务已关停。</label>}<button disabled={busy || (target === "RETIRED" && preflight.retirementBlockers.length > 0)}>{target === "RETIRED" ? "登记退役" : admin ? "恢复为计划退出" : "保存生命周期"}</button></form>}

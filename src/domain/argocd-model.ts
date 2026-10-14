@@ -3,6 +3,7 @@ export type EnvironmentIdentity = { id: string; key: string; name: string };
 export type ArgoApplicationObservation = {
   name: string;
   project: string;
+  namespace: string;
   environmentId: string;
   environmentName: string;
   environmentKey: string;
@@ -74,6 +75,7 @@ export function parseArgoApplications(
     applications.push({
       name,
       project,
+      namespace: str(record(spec.destination).namespace, 120),
       environmentId: env.id,
       environmentName: env.name,
       environmentKey: env.key,

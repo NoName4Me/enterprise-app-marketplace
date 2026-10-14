@@ -68,7 +68,7 @@ export function GithubLivePanel({ root, registered }: { root: string; registered
     {data && <>
       <p className="muted">来源：{data.source} · 最近读取：{when(data.fetchedAt)}
         {data.truncated ? " · 引用较多，仅展示前 8 条（最多 4 个仓库）" : ""}</p>
-      <p className="notice">实际部署：未接入 · 运行健康：未接入。GitHub 数据可能因凭据、访问范围或 API 限额而暂不可用。</p>
+      <p className="notice">GitHub 不提供应用真实部署/健康结论；请查看下方 Argo CD 和运维证据。GitHub 结果也可能因访问限制暂不可用。</p>
       {!data.references.length && <p className="muted">没有可查询的有效未归档引用。</p>}
       {data.references.map(ref => <article key={ref.id} className="asset-row">
         <strong>{ref.componentName} · {ref.repository}{ref.workflowId ? " · Workflow #" + ref.workflowId : ""}</strong>
