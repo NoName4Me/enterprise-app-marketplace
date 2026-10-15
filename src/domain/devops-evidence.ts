@@ -1,184 +1,189 @@
 import { getArgoOverview } from "./argocd-overview";
 import { getGithubOverview } from "./github-overview";
+import { monitoredScopes } from "./devops-scope";
 import type { Actor } from "./actor";
 import type { ArgoOverview } from "./argocd-model";
 
 export type SignalState = "OK" | "NOT_CONNECTED" | "UNKNOWN";
-export type ObservedMetric = { name: string; value: number; sampledAt: string | null; revision?: string };
-export type LogEntry = { at: string | null; line: string };
-export type AlertEntry = { name: string; severity: string; state: string; activeAt: string | null; summary: string };
+export type ObservedMetric = {
+  name:string; value:number; sampledAt:string|null; revision?:string;
+  environment?:string; namespace?:string;
+};
+export type LogEntry = {at:string|null;line:string;environment?:string;namespace?:string};
+export type AlertEntry = {
+  name:string;severity:string;state:string;activeAt:string|null;summary:string;
+  environment?:string;namespace?:string;
+};
 export type Signal<T> = {
-  source: string;
-  state: SignalState;
-  observedAt: string;
-  items: T[];
-  scope: string | null;
+  source:string;state:SignalState;observedAt:string;items:T[];scope:string|null;
 };
 export type DevopsEvidence = {
-  source: "P4 read-only external evidence";
-  collectedAt: string;
-  argo: ArgoOverview;
-  github: Awaited<ReturnType<typeof getGithubOverview>>;
-  metrics: Signal<ObservedMetric>;
-  logs: Signal<LogEntry>;
-  alerts: Signal<AlertEntry>;
-  scopeNote: string;
+  source:"P4 read-only external evidence";
+  collectedAt:string;argo:ArgoOverview;
+  github:Awaited<ReturnType<typeof getGithubOverview>>;
+  metrics:Signal<ObservedMetric>;logs:Signal<LogEntry>;alerts:Signal<AlertEntry>;
+  scopeNote:string;
 };
 
-function configuredEndpoint(key: string): URL | null {
-  const value = process.env[key]?.trim();
-  if (!value) return null;
+function configuredEndpoint(key:string):URL|null {
+  const value=process.env[key]?.trim();
+  if(!value)return null;
   try {
-    const url = new URL(value);
-    if (url.username || url.password || url.search || url.hash) return null;
-    if (url.protocol === "https:") return url;
-    // Only trusted, explicitly configured local endpoints may use HTTP.
-    if (url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]",
+    const url=new URL(value);
+    if(url.username||url.password||url.search||url.hash)return null;
+    if(url.protocol==="https:")return url;
+    if(url.protocol==="http:"&&[
+      "localhost","127.0.0.1","[::1]",
       "monitor-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local",
-      "loki-gateway.monitoring.svc.cluster.local"].includes(url.hostname)) return url;
+      "loki-gateway.monitoring.svc.cluster.local",
+    ].includes(url.hostname))return url;
     return null;
-  } catch { return null; }
+  }catch{return null;}
 }
-async function readJson(server: URL, path: string, params: Record<string, string>): Promise<unknown> {
-  const url = new URL(server.toString());
-  url.pathname = url.pathname.replace(/\/$/, "") + path;
-  Object.entries(params).forEach(([name, value]) => url.searchParams.set(name, value));
-  const response = await fetch(url, {
-    headers: { Accept: "application/json" },
-    redirect: "error",
-    cache: "no-store",
-    signal: AbortSignal.timeout(6500),
-  });
-  if (!response.ok || Number(response.headers.get("content-length") || 0) > 131072)
-    throw new Error("unavailable_provider");
-  const text = await response.text();
-  if (text.length > 131072) throw new Error("provider_response_too_large");
-  return JSON.parse(text) as unknown;
+async function readJson(server:URL,path:string,params:Record<string,string>):Promise<unknown>{
+  const url=new URL(server);
+  url.pathname=url.pathname.replace(/\/$/,"")+path;
+  Object.entries(params).forEach(([k,v])=>url.searchParams.set(k,v));
+  const response=await fetch(url,{headers:{Accept:"application/json"},redirect:"error",
+    cache:"no-store",signal:AbortSignal.timeout(6500)});
+  if(!response.ok||Number(response.headers.get("content-length")||0)>131072)
+    throw new Error("provider_unavailable");
+  const data=await response.text();
+  if(data.length>131072)throw new Error("provider_response_too_large");
+  return JSON.parse(data) as unknown;
 }
-function obj(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+function obj(value:unknown):Record<string,unknown>{
+  return value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{};
 }
-function arr(value: unknown): unknown[] { return Array.isArray(value) ? value : []; }
-function isoEpoch(value: unknown): string | null {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  const d = new Date(n * 1000);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+function arr(value:unknown):unknown[]{return Array.isArray(value)?value:[];}
+function time(value:unknown):string|null {
+  const n=Number(value);
+  if(!Number.isFinite(n)||n<=0)return null;
+  const date=new Date(n*1000);
+  return Number.isNaN(date.getTime())?null:date.toISOString();
 }
-const metricQueries = [
-  { name: "active_release", query: (ns: string) => 'marketplace_lab_info{namespace="' + ns + '"}' },
-  { name: "active_lab_health", query: (ns: string) => 'min(marketplace_lab_health{namespace="' + ns + '"})' },
-  { name: "namespace_ready_pods", query: (ns: string) => 'sum(kube_pod_status_ready{namespace="' + ns + '",condition="true"})' },
-  { name: "namespace_container_restarts", query: (ns: string) => 'sum(kube_pod_container_status_restarts_total{namespace="' + ns + '"})' },
+const metricQueries=[
+  {name:"namespace_ready_pods",query:(ns:string)=>'sum(kube_pod_status_ready{namespace="'+ns+'",condition="true"})'},
+  {name:"namespace_container_restarts",query:(ns:string)=>'sum(kube_pod_container_status_restarts_total{namespace="'+ns+'"})'},
 ];
-export async function collectDevopsEvidence(actor: Actor | null, appId: string, admin = false): Promise<DevopsEvidence> {
-  const [argo, github] = await Promise.all([
-    getArgoOverview(actor, appId, admin),
-    getGithubOverview(actor, appId, admin),
+
+export async function collectDevopsEvidence(actor:Actor|null,appId:string,admin=false):Promise<DevopsEvidence>{
+  const [argo,github]=await Promise.all([
+    getArgoOverview(actor,appId,admin),getGithubOverview(actor,appId,admin),
   ]);
-  const collectedAt = new Date().toISOString();
-  const prom = configuredEndpoint("PROMETHEUS_SERVER_URL");
-  const loki = configuredEndpoint("LOKI_SERVER_URL");
-  const emptyMetrics: Signal<ObservedMetric> = {
-    source: "Prometheus query API", state: prom ? "UNKNOWN" : "NOT_CONNECTED",
-    observedAt: collectedAt, items: [], scope: null,
+  const collectedAt=new Date().toISOString();
+  const prom=configuredEndpoint("PROMETHEUS_SERVER_URL");
+  const loki=configuredEndpoint("LOKI_SERVER_URL");
+  const scopes=monitoredScopes(argo,appId);
+  const scopeNames=scopes.map(item=>item.namespace);
+  const metrics:Signal<ObservedMetric>={source:"Prometheus query API",
+    state:prom?"UNKNOWN":"NOT_CONNECTED",observedAt:collectedAt,items:[],
+    scope:scopeNames.join(", ")||null};
+  const alerts:Signal<AlertEntry>={source:"Prometheus alerts API",
+    state:prom?"UNKNOWN":"NOT_CONNECTED",observedAt:collectedAt,items:[],
+    scope:scopeNames.join(", ")||null};
+  const logs:Signal<LogEntry>={source:"Loki query_range API",
+    state:loki?"UNKNOWN":"NOT_CONNECTED",observedAt:collectedAt,items:[],
+    scope:scopeNames.join(", ")||null};
+  const scopeNote=!scopes.length
+    ? "未确认当前应用的独立 Argo 项目/环境命名空间；禁止读取共享监控范围以免混入其他应用。"
+    : "已验证 "+scopes.length+" 个环境的 Argo 归属；采集按环境 namespace 隔离，未采集到指标不代表正常。";
+  if(!scopes.length)return{
+    source:"P4 read-only external evidence",collectedAt,argo,github,metrics,alerts,logs,scopeNote,
   };
-  const emptyAlerts: Signal<AlertEntry> = {
-    source: "Prometheus alerts API", state: prom ? "UNKNOWN" : "NOT_CONNECTED",
-    observedAt: collectedAt, items: [], scope: null,
-  };
-  const emptyLogs: Signal<LogEntry> = {
-    source: "Loki query_range API", state: loki ? "UNKNOWN" : "NOT_CONNECTED",
-    observedAt: collectedAt, items: [], scope: null,
-  };
-  // P4 lab: one Argo Application in a dedicated namespace; avoid namespace-wide
-  // queries in a shared namespace (they would expose unrelated applications).
-  const allowedNamespace = process.env.P4_MONITORED_NAMESPACE || "marketplace-lab";
-  const matching = argo.state === "OK"
-    ? argo.applications.filter(item => item.namespace === allowedNamespace && /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(item.namespace))
-    : [];
-  const ns = matching.length === 1 ? matching[0].namespace : null;
-  if (!ns) return {
-    source: "P4 read-only external evidence", collectedAt, argo, github,
-    metrics: emptyMetrics, logs: emptyLogs, alerts: emptyAlerts,
-    scopeNote: "没有恰好一条映射到专用实验命名空间的 Argo 应用，跳过命名空间聚合指标和日志，避免混入其他应用。",
-  };
-  const metrics: Signal<ObservedMetric> = { ...emptyMetrics, scope: ns };
-  const logs: Signal<LogEntry> = { ...emptyLogs, scope: ns };
-  const alerts: Signal<AlertEntry> = { ...emptyAlerts, scope: ns };
+
   await Promise.all([
-    (async () => {
-      if (!prom) return;
-      try {
-        const all = await Promise.all(metricQueries.map(metric =>
-          readJson(prom, "/api/v1/query", { query: metric.query(ns) })));
-        const items: ObservedMetric[] = [];
-        for (let i = 0; i < all.length; i++) {
-          const result = obj(all[i]);
-          if (result.status !== "success") throw new Error("bad_query_status");
-          const series = arr(obj(result.data).result);
-          if (metricQueries[i].name === "active_release" && series.length !== 1) continue;
-          const revision = String(obj(obj(series[0]).metric).revision || "");
-          const sample = arr(obj(series[0]).value);
-          if (sample.length !== 2) continue;
-          const value = Number(sample[1]);
-          if (Number.isFinite(value)) items.push({ name: metricQueries[i].name, value, sampledAt: isoEpoch(sample[0]),
-            ...(metricQueries[i].name === "active_release" && (/^[a-f0-9]{40}$/.test(revision) || revision === "local") ? { revision } : {}) });
-        }
-        metrics.items = items;
-        metrics.state = items.length ? "OK" : "UNKNOWN";
-      } catch { metrics.state = "UNKNOWN"; }
-    })(),
-    (async () => {
-      if (!prom) return;
-      try {
-        const payload = obj(await readJson(prom, "/api/v1/alerts", {}));
-        if (payload.status !== "success") throw new Error("bad_prometheus_alerts");
-        alerts.items = arr(obj(payload.data).alerts).filter(value =>
-          obj(obj(value).labels).namespace === ns).slice(0, 16).map(value => {
-          const row = obj(value), labels = obj(row.labels), annotations = obj(row.annotations);
-          const activeAt = typeof row.activeAt === "string" && !Number.isNaN(Date.parse(row.activeAt)) ? row.activeAt : null;
-          return {
-            name: String(labels.alertname ?? "unknown").slice(0, 100),
-            severity: String(labels.severity ?? "unknown").slice(0, 30),
-            state: String(row.state ?? "unknown").slice(0, 20),
-            activeAt,
-            summary: String(annotations.summary ?? "").slice(0, 300),
-          };
+    (async()=>{
+      if(!prom)return;
+      let succeeded=false;
+      const result=await Promise.all(scopes.flatMap(scope=>{
+        const queries=scope.container==="lab"
+          ?[{name:"active_release",query:(ns:string)=>'marketplace_lab_info{namespace="'+ns+'"}'},
+            {name:"active_lab_health",query:(ns:string)=>'min(marketplace_lab_health{namespace="'+ns+'"})'},
+            ...metricQueries]:metricQueries;
+        return queries.map(async item=>{
+          try {
+            const response=obj(await readJson(prom,"/api/v1/query",{query:item.query(scope.namespace)}));
+            if(response.status!=="success")return;
+            const series=arr(obj(response.data).result);
+            if(item.name==="active_release"&&series.length!==1)return;
+            for(const point of series.slice(0,1)){
+              const entry=obj(point);
+              const value=arr(entry.value);
+              if(value.length!==2)continue;
+              const n=Number(value[1]);
+              if(!Number.isFinite(n))continue;
+              const revision=String(obj(entry.metric).revision||"");
+              metrics.items.push({
+                name:item.name,value:n,sampledAt:time(value[0]),
+                environment:scope.environment,namespace:scope.namespace,
+                ...(item.name==="active_release"&&(/^[a-f0-9]{40}$/.test(revision)||revision==="local")?{revision}:{}),
+              });
+            }
+            succeeded=true;
+          }catch{ /* preserve partial evidence and mark unavailable if all fail */ }
         });
-        alerts.state = "OK";
-      } catch { alerts.state = "UNKNOWN"; }
+      }));
+      void result;
+      metrics.state=succeeded?"OK":"UNKNOWN";
     })(),
-    (async () => {
-      if (!loki) return;
+    (async()=>{
+      if(!prom)return;
       try {
-        const payload = obj(await readJson(loki, "/loki/api/v1/query_range", {
-          query: '{namespace="' + ns + '",container="lab"}',
-          start: String((Date.now() - 15 * 60 * 1000) * 1000000),
-          end: String(Date.now() * 1000000),
-          limit: "20",
-          direction: "BACKWARD",
-        }));
-        if (payload.status !== "success") throw new Error("bad_loki_status");
-        const streams = arr(obj(payload.data).result);
-        const items: LogEntry[] = [];
-        for (const series of streams) for (const pair of arr(obj(series).values)) {
-          const row = arr(pair);
-          if (row.length !== 2 || typeof row[1] !== "string") continue;
-          const n = Number(row[0]);
-          items.push({
-            at: Number.isFinite(n) && n > 0 ? new Date(Math.floor(n / 1000000)).toISOString() : null,
-            line: row[1].slice(0, 350),
-          });
-          if (items.length >= 20) break;
-        }
-        logs.items = items.slice(0, 20);
-        logs.state = "OK";
-      } catch { logs.state = "UNKNOWN"; }
+        const response=obj(await readJson(prom,"/api/v1/alerts",{}));
+        if(response.status!=="success")throw new Error("prometheus_alerts");
+        const allowed=new Map(scopes.map(scope=>[scope.namespace,scope.environment]));
+        alerts.items=arr(obj(response.data).alerts).flatMap(value=>{
+          const row=obj(value),labels=obj(row.labels),ns=labels.namespace;
+          if(typeof ns!=="string"||!allowed.has(ns))return [];
+          const annotations=obj(row.annotations);
+          const active=typeof row.activeAt==="string"&&!Number.isNaN(Date.parse(row.activeAt))?row.activeAt:null;
+          return [{
+            name:String(labels.alertname??"unknown").slice(0,100),
+            severity:String(labels.severity??"unknown").slice(0,30),
+            state:String(row.state??"unknown").slice(0,20),
+            activeAt:active,summary:String(annotations.summary??"").slice(0,300),
+            namespace:ns,environment:allowed.get(ns),
+          }];
+        }).slice(0,24);
+        alerts.state="OK";
+      }catch{alerts.state="UNKNOWN";}
+    })(),
+    (async()=>{
+      if(!loki)return;
+      let successes=0;
+      await Promise.all(scopes.map(async scope=>{
+        try {
+          const now=Date.now();
+          const response=obj(await readJson(loki,"/loki/api/v1/query_range",{
+            query:'{namespace="'+scope.namespace+'",container="'+scope.container+'"}',
+            start:String((now-15*60*1000)*1000000),end:String(now*1000000),
+            limit:"20",direction:"BACKWARD",
+          }));
+          if(response.status!=="success")return;
+          successes++;
+          for(const stream of arr(obj(response.data).result)){
+            for(const sample of arr(obj(stream).values)){
+              const pair=arr(sample);
+              if(pair.length!==2||typeof pair[1]!=="string")continue;
+              const ns=Number(pair[0]);
+              logs.items.push({
+                at:Number.isFinite(ns)&&ns>0?new Date(Math.floor(ns/1000000)).toISOString():null,
+                line:pair[1].slice(0,350),
+                namespace:scope.namespace,environment:scope.environment,
+              });
+              if(logs.items.length>=40)break;
+            }
+            if(logs.items.length>=40)break;
+          }
+        }catch{ /* inaccessible scope doesn't authorize a broader fallback */ }
+      }));
+      logs.items.sort((a,b)=>(b.at??"").localeCompare(a.at??""));
+      logs.state=successes===scopes.length?"OK":"UNKNOWN";
     })(),
   ]);
   return {
-    source: "P4 read-only external evidence", collectedAt, argo, github, metrics, logs, alerts,
-    scopeNote: "监控指标是独立实验命名空间聚合值；日志只取 lab 容器最近 15 分钟的有限样本。真实流量与业务恢复需另外验证。",
+    source:"P4 read-only external evidence",collectedAt,argo,github,metrics,alerts,logs,
+    scopeNote:scopeNote+" 云端诊断默认不上传原始日志。",
   };
 }
