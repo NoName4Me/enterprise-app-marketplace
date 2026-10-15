@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { NativeConnection, Worker } from "@temporalio/worker";
 import * as activities from "./activities";
+import * as hostedActivities from "./hosted-activities";
 import { DELIVERY_QUEUE } from "./contracts";
 
 async function main() {
@@ -9,7 +10,7 @@ async function main() {
     connection, namespace: process.env.TEMPORAL_NAMESPACE || "default",
     taskQueue: DELIVERY_QUEUE,
     workflowsPath: require.resolve("./workflows"),
-    activities,
+    activities: {...activities,...hostedActivities},
     maxConcurrentActivityTaskExecutions: 2,
   });
   console.log("Temporal delivery worker started:", DELIVERY_QUEUE);

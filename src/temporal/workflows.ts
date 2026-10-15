@@ -82,3 +82,5 @@ export async function deliveryWorkflow(input: DeliveryInput): Promise<DeliverySn
     state={...state,stage:"AWAITING_PR_REVIEW",note:result.note};
   }
 }
+
+export {hostedReleaseWorkflow} from './hosted-workflows';
