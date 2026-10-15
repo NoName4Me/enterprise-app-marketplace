@@ -16,3 +16,6 @@ P4+ 第三方监控/告警聚合；P5+ 独立 AI Worker/持久任务
 服务端必须校验账号状态、角色、创建权、资源 owner、操作与环境；隐藏前端按钮不等于授权。管理员不自然拥有生产部署权。业务关键状态用事务、约束及审计保证一致性。
 
 门户聚合信息并提供受控入口，专业监控/日志/流水线仍留给原平台。未来 AI 负责理解、规划、编码、诊断，长期执行由独立 Worker/持久状态管理；确定性代码决定权限、风险/环境、版本绑定、幂等、执行及回滚校验。公共 PR 不连接本机高权限 Runner。技术缘由见 [ADR-001](decisions/ADR-001-technical-baseline.md)、[ADR-002](decisions/ADR-002-platform-evolution.md)。
+## 实验服务器运行形态（2026-10-15）
+
+单台 Mac mini M4/16GB：OrbStack **内置 Kubernetes** 内运行 Next.js、Temporal Server/UI、门户 Temporal Activity Worker、Argo CD/Rollouts、监控与演示应用；不创建独立 Linux VM，不在 macOS 原生运行 Temporal。现有 Compose PostgreSQL 保留原卷，`market`、`temporal`、`temporal_visibility` 为同一实例的三套独立数据库。外部 AI 推理用云端模型。完整本地操作与数据备份边界见 [MAC_MINI_SETUP.md](MAC_MINI_SETUP.md)。

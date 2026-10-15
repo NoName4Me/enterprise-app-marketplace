@@ -78,3 +78,7 @@ spec:
 - 使用当前 `.env` 中的 `AIOPS_LLM_API_KEY`（或 `DEEPSEEK_API_KEY`），`AIOPS_LLM_BASE_URL`，`AIOPS_LLM_MODEL` 供 P4 诊断和 P3 应用语义排序共用。默认不把原始 Loki 日志送给第三方模型。只读取服务端变量，不在浏览器暴露密钥。
 - P5 选用 GitHub Copilot Cloud Agent 的公开 API；需要 `P5_COPILOT_USER_TOKEN`（**用户令牌**，非 GitHub App 安装令牌）和 `P5_ALLOWED_REPOS`。仅允许应用 owner 向明确登记且未归档、白名单内唯一 GitHub 仓库派发任务；需要该仓库启用/有权限使用 Copilot Cloud Agent。外部任务超时会记录 UNKNOWN，必须人工核对后处理。
 - P5 任务默认以 dev 为基线并请求 GitHub 创建 PR，**不会自动合并、测试环境发布或改动 Mac 本地文件**。普通运维 Token 与 Coding Agent Token 分开。
+
+## Mac mini 服务器唯一部署指南（2026-10-15）
+
+OrbStack Kubernetes、已有 Compose PostgreSQL、Temporal Server/UI/Worker、门户、Argo CD 与观测栈的统一部署与未实测验收参见 **[MAC_MINI_SETUP.md](MAC_MINI_SETUP.md)**。不要再使用 TEMP_ 指南中的 macOS SQLite/本地 Temporal Server 命令。
