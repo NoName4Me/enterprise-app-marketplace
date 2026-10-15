@@ -9,7 +9,7 @@ function endpoint(): URL | null {
     const url = new URL(raw);
     if (url.username || url.password || url.search || url.hash) return null;
     if (url.protocol !== "https:" &&
-        !(url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))) return null;
+        !(url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]", "argocd-server.argocd.svc.cluster.local"].includes(url.hostname))) return null;
     return url;
   } catch {
     return null;
@@ -30,9 +30,11 @@ export async function getArgoOverview(actor: Actor | null, appId: string, admin 
   const base = { source: "Argo CD Applications API" as const, observedAt, environments,
     applications: [], truncated: false, dashboardUrl: null };
   const server = endpoint();
+  // A Kubernetes-only FQDN must not be returned as a browser-facing dashboard link.
+  const dashboardUrl = server && !server.hostname.endsWith(".svc.cluster.local") ? server.toString() : null;
   const projects = permittedProjects();
   if (!server || !projects.size) return { ...base, state: "NOT_CONNECTED" };
-  if (!environments.length) return { ...base, state: "OK", dashboardUrl: server.toString() };
+  if (!environments.length) return { ...base, state: "OK", dashboardUrl };
   try {
     const url = new URL(server.toString());
     url.pathname = url.pathname.replace(/\/$/, "") + "/api/v1/applications";
@@ -48,11 +50,11 @@ export async function getArgoOverview(actor: Actor | null, appId: string, admin 
       redirect: "error",
       signal: AbortSignal.timeout(8000),
     });
-    if (!response.ok) return { ...base, state: "UNKNOWN", dashboardUrl: server.toString() };
+    if (!response.ok) return { ...base, state: "UNKNOWN", dashboardUrl };
     const parsed: unknown = await response.json();
     const result = parseArgoApplications(parsed, appId, environments, projects);
-    return { ...base, state: "OK", ...result, dashboardUrl: server.toString() };
+    return { ...base, state: "OK", ...result, dashboardUrl };
   } catch {
-    return { ...base, state: "UNKNOWN", dashboardUrl: server.toString() };
+    return { ...base, state: "UNKNOWN", dashboardUrl };
   }
 }

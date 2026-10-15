@@ -29,7 +29,7 @@ export async function requestLabRolloutAction(actor: Actor | null, appId: string
     url = new URL(raw);
     if (url.username || url.password || url.hash || url.search ||
       (url.protocol !== "https:" && !(url.protocol === "http:" &&
-        ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)))) throw new Error("bad_endpoint");
+        ["localhost", "127.0.0.1", "[::1]", "argocd-server.argocd.svc.cluster.local"].includes(url.hostname)))) throw new Error("bad_endpoint");
     url.pathname = url.pathname.replace(/\/$/, "") + "/api/v1/applications/marketplace-lab/resource/actions/v2";
   } catch { throw new AppError(422, "p4_rollout_action_not_configured"); }
   try {

@@ -1,6 +1,6 @@
 # 功能优先路线图：从员工任务到真实交付
 
-> **Temporal 架构确定（2026-10-15）**：P3 的长流程、P5/P6 编码审核、P4 发布验证、P7 运维修复及未来 P8 自动建应用统一使用 Temporal。P3 的普通 CRUD、P4 的读监控仍用 PostgreSQL/HTTP；Workflow 不直接调用外部 API。本轮首先实现 P5 分析→人审→Agent 派发→任务跟踪，详情见 [TEMP_TEMPORAL_MAC_SETUP.md](TEMP_TEMPORAL_MAC_SETUP.md)。
+> **Temporal 架构确定（2026-10-15）**：P3 的长流程、P5/P6 编码审核、P4 发布验证、P7 运维修复及未来 P8 自动建应用统一使用 Temporal。P3 的普通 CRUD、P4 的读监控仍用 PostgreSQL/HTTP；Workflow 不直接调用外部 API。本轮首先实现 P5 分析→人审→Agent 派发→任务跟踪，详情见 [MAC_MINI_SETUP.md](MAC_MINI_SETUP.md)。
 >
 > **2026-10-14 最新阶段**：应用门户定位不变，AI DevOps 是私有应用维护能力。P4 已有 GitOps + Argo CD/Rollouts + Prometheus/Loki + DeepSeek/兼容云端模型只读诊断，**Mac 实机部署联调仍待执行**。
 > **P3 已编码**：需求提交、讨论、负责人认领与 GitHub Issue/PR 关联；AI 仅对已审核应用语义排序，模型异常回退关键词，不用代码 RAG。

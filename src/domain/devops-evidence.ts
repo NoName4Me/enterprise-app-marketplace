@@ -33,7 +33,9 @@ function configuredEndpoint(key: string): URL | null {
     if (url.username || url.password || url.search || url.hash) return null;
     if (url.protocol === "https:") return url;
     // Only trusted, explicitly configured local endpoints may use HTTP.
-    if (url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) return url;
+    if (url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]",
+      "monitor-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local",
+      "loki-gateway.monitoring.svc.cluster.local"].includes(url.hostname)) return url;
     return null;
   } catch { return null; }
 }
