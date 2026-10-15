@@ -66,3 +66,9 @@
 遵守 [QUALITY](QUALITY.md)：功能优先，普通业务主流程先行，权限/迁移/发布相关边界必须保留必要验证；原有 CI 不因路线图修改而降级。完成一个主要批次后，在 PR/Issue 中按“真实业务闭环 / 断点 / 数据可信度 / AI 机会 / 技术代价”五项快速评估下一批改进，不新建大量评估文档。
 
 **明确暂缓**：Agent/工作流市场、独立论坛、通用 BPM、可配置服务评分引擎、自建 Git/Jenkins/GitLab/K8s/复杂监控存储。平台内部使用的 AI Agent 不属于暂缓的 Agent 市场。
+## 2026-10-15 补充进展：托管发布、逐应用监控、运维转需求
+
+- 第一阶段（配置生成，**不是一键部署**）：`scripts/p4-hosted-manifest.mjs` 输入真实 App/Environment UUID、已发布 GHCR Digest、NodePort、仓库，生成隔离的 Deployment / NodePort Service 和 Argo Application；`p4/gitops/hosted/project.yaml` 限制 Argo 权限。只有测试镜像通过真实健康/网络探测后，未来才能进入生产晋级流程。另见 `docs/HOSTED_RELEASE.md`。
+- 第二阶段（只读接入）：`devops-scope.ts` 从受权限约束的 Argo 标签校验 HOSTED 应用对应的 `hosted-<appUUID>-test|production` 命名空间，再按环境读取 Prometheus Pod 指标、告警和 Loki 日志。未绑定/未采集的数据保持 UNKNOWN，不复用实验应用数据。
+- 第三阶段（人工确认的初步联动）：运行页的 AI 诊断可作为**可编辑的 BUG 修复需求**提交。负责人确定范围后才进入现有 P3→P5 Temporal 编码审核。**尚未实现自动故障告警触发、Temporal 受控修复执行、自动回滚和事后运行验证**。
+- 本轮只做代码、清单和测试；Mac 实机增量部署、GitHub 真实镜像 Build、NodePort 从 LAN 访问仍然 NOT RUN。不要重复执行全套 MAC_MINI_SETUP。

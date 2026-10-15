@@ -52,7 +52,7 @@ jobs:
           test -z "$(git ls-files --others --exclude-standard drizzle/)"
       - name: Validate Temporal/OrbStack deployment contract (PR)
         if: github.event_name == 'pull_request'
-        run: node --test scripts/p4-infra.test.mjs
+        run: node --test scripts/p4-infra.test.mjs scripts/p4-hosted-manifest.test.mjs
       - name: Render pinned official Temporal Helm Chart (PR)
         if: github.event_name == 'pull_request'
         run: |
@@ -96,7 +96,7 @@ jobs:
         run: pnpm test:db
       - name: Fast required gate - typecheck lint build
         run: |
-          node --test scripts/p4-open-promotion.test.mjs lab/test-service/server.test.mjs
+          node --test scripts/p4-open-promotion.test.mjs scripts/p4-hosted-manifest.test.mjs lab/test-service/server.test.mjs
           pnpm typecheck
           pnpm temporal:bundle
           pnpm lint

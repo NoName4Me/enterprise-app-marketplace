@@ -271,3 +271,15 @@ Mac mini 核心环境已经部署完成，本轮**不要重跑完整安装步骤
 - 部署控制器必须先部署 Kubernetes Service `type: NodePort`，并实际从客户端执行 `curl http://<IP>:<port>/...` 或应用自己的健康探测，然后才能记录 READY+verifiedAt。OrbStack NodePort 是否从局域网可达**仍需实机验证**；若不通先调整受控入口映射，不要提前把预留 URL 暴露给员工。
 - 当前应用门户还没有可泛化的 GHCR 镜像构建和 Kubernetes 发布器，因此页面会明确提示尚未部署。旧 `marketplace-lab` 故障演练表单已从普通发布工作台移出；不删除底层存量记录。
 
+
+## 后续代码进展与本地 Agent 增量操作（2026-10-15）
+
+**不必重新安装** OrbStack、PostgreSQL、Temporal、Argo 或监控。请等最新 dev 的 CI 通过后，才在 Mac 进行下列增量工作：
+
+1. `git fetch origin && git checkout dev && git pull --ff-only origin dev`；确认没有覆盖 Mac 上未提交的 .env 或工作区文件。
+2. 先确认原来的 market 数据库有可恢复备份，核对 `DATABASE_URL` 实际指向 market 而不是 temporal，然后执行一次 `pnpm db:migrate`（0009 和 0010）；检查应用原数据无变化。
+3. 按原有 Portal 镜像部署方式更新**仅门户服务**，不要清理 `market_pg` 等已有卷；门户使用的 `ARGOCD_ALLOWED_PROJECTS` 将来需允许 `marketplace-hosted`，但先由 Argo 管理员核对权限。
+4. `kubectl get svc -A -o wide` 检查 NodePort `31000–31999` 是否冲突。`HOSTED_PUBLIC_IP` 只设置为经 Mac/LAN 客户端测试可达的固定 IPv4。**现在仅预约端口，不会创建 NodePort Service 或开放访问**。
+5. `node --test scripts/p4-hosted-manifest.test.mjs` 可在 Mac 非破坏性运行。通用部署尚未完成之前，不要把渲染出的 YAML 直接当生产发布操作执行；真实验证步骤详见 `docs/HOSTED_RELEASE.md`。
+
+当前最需要本地 Agent 返回的事实：`kubectl get nodes`、`kubectl get svc -A`（移除任何私密信息后）、固定 IP:NodePort 从 LAN 的连通性、与 GitHub GHCR 对应源仓库的权限限制。这些只影响后续真实部署联调，不阻碍继续编写代码。
