@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: marketplace-portal
+  namespace: marketplace
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: marketplace-portal
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: marketplace-portal
+    spec:
+      containers:
+        - name: portal
+          image: marketplace/portal:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+          envFrom:
+            - secretRef:
+                name: portal-runtime
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: temporal-frontend.temporal.svc.cluster.local:7233
+            - name: TEMPORAL_NAMESPACE
+              value: default
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 8
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: marketplace-portal
+  namespace: marketplace
+spec:
+  selector:
+    app.kubernetes.io/name: marketplace-portal
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: marketplace-portal
+  namespace: marketplace
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: portal.k8s.orb.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: marketplace-portal
+                port:
+                  name: http
