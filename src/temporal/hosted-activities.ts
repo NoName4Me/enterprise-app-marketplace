@@ -267,6 +267,22 @@ Promise<{ready:boolean;note:string}>{
       sync.status!=="Synced"||health.status!=="Healthy"||
       !Array.isArray(summary.images)||!summary.images.includes(image))
       return {ready:false,note:"Argo 未确认应用归属、Synced/Healthy 或镜像 Digest"};
+    // A successful HTTP GET on an occupied NodePort is not sufficient:
+    // prove the Service belongs to this app and uses its RESERVED port.
+    const resourcePath="/api/v1/applications/"+ns+"/resource?"+
+      new URLSearchParams({namespace:ns,resourceName:"web",version:"v1",kind:"Service"}).toString();
+    const serviceResponse=await argo(resourcePath);
+    if(!serviceResponse.ok)return {ready:false,note:"无法读取 Argo 已同步的 Service"};
+    const resource=await json(serviceResponse);
+    const rawManifest=str(resource.manifest);
+    if(!rawManifest||rawManifest.length>24000)return {ready:false,note:"Service 资源清单不可读"};
+    const service=value(JSON.parse(rawManifest) as unknown);
+    const spec=value(service.spec),metaService=value(service.metadata);
+    const ports=Array.isArray(spec.ports)?spec.ports:[];
+    if(metaService.name!=="web"||metaService.namespace!==ns||
+      spec.type!=="NodePort"||value(spec.selector).app!=="web"||
+      !ports.some(p=>num(value(p).nodePort)===input.nodePort))
+      return {ready:false,note:"实际 Service 归属或 NodePort 与平台预约不一致"};
     const ip=token("HOSTED_PUBLIC_IP").split(".").map(Number);
     if(ip.length!==4||ip.some(n=>!Number.isInteger(n)||n<0||n>255)||
        !(ip[0]===10||(ip[0]===172&&ip[1]>=16&&ip[1]<=31)||
