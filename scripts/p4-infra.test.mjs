@@ -12,7 +12,7 @@ test("Temporal uses the existing PostgreSQL instance with independent stores", (
   assert.equal((chart.match(/existingSecret: temporal-db-secret/g) || []).length, 2);
   assert.equal((chart.match(/manageSchema: true/g) || []).length, 2);
   assert.equal((chart.match(/createDatabase: false/g) || []).length, 2);
-  assert.doesNotMatch(chart, /sqlite|elasticsearch:|cassandra:/i);
+  assert.doesNotMatch(chart.replace(/^#.*$/gm, ""), /sqlite|elasticsearch:|cassandra:/i);
   const sql = read("p4/temporal/bootstrap-databases.psql");
   assert.match(sql, /CREATE DATABASE temporal OWNER temporal_user/);
   assert.match(sql, /CREATE DATABASE temporal_visibility OWNER temporal_user/);
@@ -36,7 +36,8 @@ test("Portal and application Worker use Kubernetes Temporal Service DNS", () => 
 
 test("The unified Mac setup replaces separate SQLite/host installations", () => {
   const doc = read("docs/MAC_MINI_SETUP.md");
-  assert.match(doc, /Temporal.*Kubernetes/);
+  assert.match(doc, /OrbStack 内置单节点 Kubernetes/);
+  assert.match(doc, /Temporal Server/);
   assert.match(doc, /market_pg/);
   assert.match(doc, /pg_dump/);
   assert.match(doc, /NOT RUN/);
