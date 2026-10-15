@@ -169,3 +169,7 @@ P4 不安装 Ollama。DeepSeek 默认使用 https://api.deepseek.com/chat/comple
 ## P3/P5 与单机联调关系
 
 P3 需求中心使用门户 PostgreSQL，必须在**隔离测试库验证**新迁移 0008 后再对 Mac 上已存在数据的数据库按既有流程增量迁移（不可清空卷）。P5 不需要在 Mac 上安装 Coding Agent，GitHub 服务器端运行 Copilot Cloud Agent；只需本地服务端 `.env` 配置 `P5_COPILOT_USER_TOKEN`、`P5_ALLOWED_REPOS`，仓库需具备 Copilot 付费资格并启用该能力。未开通时返回 NOT_CONNECTED/配置缺失，不会假装 Agent 已运行。DeepSeek 等云端模型 API 不依赖本机 GPU/Ollama。
+
+## Temporal 长期交付工作流
+
+Temporal 的 Mac 实验指引见 [TEMP_TEMPORAL_MAC_SETUP.md](TEMP_TEMPORAL_MAC_SETUP.md)；原有 GitHub CI / Argo CD / Rollouts 仍保留各自职责，不在门户重写发布状态机。

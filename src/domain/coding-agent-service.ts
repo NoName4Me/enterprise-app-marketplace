@@ -16,14 +16,14 @@ function headers() {
   return { Authorization: "Bearer " + key, Accept: "application/vnd.github+json",
     "Content-Type": "application/json", "X-GitHub-Api-Version": "2022-11-28" };
 }
-async function permittedOwner(actor: Actor | null, requirementId: string) {
+export async function permittedOwner(actor: Actor | null, requirementId: string) {
   const actorData = await authorizeActor(actor, "create");
   const req = await getRequirement(actor, requirementId);
   if (!req.appId || req.ownerId !== actorData.id || req.status === "DONE" || req.status === "REJECTED")
     throw new AppError(403, "coding_task_not_allowed");
   return { req, actorData };
 }
-async function sourceRepo(appId: string) {
+export async function sourceRepo(appId: string) {
   const refs = await db.select({ repo: externalReferences.repositoryFullName })
     .from(externalReferences)
     .innerJoin(appComponents, and(eq(appComponents.id, externalReferences.componentId),
