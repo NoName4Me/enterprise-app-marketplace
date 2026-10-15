@@ -46,9 +46,9 @@ export function HostedReleasePanel({root,repo,testReady,testDigest,productionDig
     finally{setLoading(false);}
   },[root]);
   useEffect(()=>{
-    void refresh();
+    const initial=setTimeout(()=>{void refresh();},0);
     const interval=setInterval(()=>{void refresh();},15000);
-    return()=>clearInterval(interval);
+    return()=>{clearTimeout(initial);clearInterval(interval);};
   },[refresh]);
   const activeTest=rows.some(r=>r.environment==="TEST"&&active(r.status));
   const activeProd=rows.some(r=>r.environment==="PRODUCTION"&&active(r.status));
