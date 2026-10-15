@@ -1,0 +1,21 @@
+# Apply once after Argo CD installation; GitOps PRs must be reviewed.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: marketplace-hosted
+  namespace: argocd
+spec:
+  description: Platform-managed, per-application namespaces
+  sourceRepos:
+    - https://github.com/NoName4Me/enterprise-app-marketplace.git
+  destinations:
+    - namespace: hosted-*
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: apps
+      kind: Deployment
+    - group: ""
+      kind: Service
