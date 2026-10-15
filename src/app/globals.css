@@ -268,3 +268,39 @@ p { line-height: 1.75; overflow-wrap: anywhere; }
 .asset-checkbox { display: flex; align-items: flex-start; gap: 10px; line-height: 1.7; }
 .asset-checkbox input { width: auto; margin-top: 5px; flex-shrink: 0; }
 #assets, #lifecycle, #registration { scroll-margin-top: 20px; }
+
+/* Task-oriented IA — shared across marketplace, delivery and operations. */
+.nav-group { display:grid;gap:6px; }
+.nav-group .nav-caption {margin:0 13px 8px; }
+.nav-admin-menu { border-top:1px solid var(--border); margin-top:18px; padding-top:16px; }
+.nav-admin-menu summary {cursor:pointer; padding:8px 13px; color:var(--muted);font-weight:600;list-style:none; }
+.nav-admin-menu summary:before {content:"＋";margin-right:8px;}
+.nav-admin-menu[open] summary:before {content:"−";}
+.nav-admin-menu .nav-group {padding-top:10px;}
+.sidebar-footer {margin-top:auto;padding:8px 12px;}
+.sidebar-footer a {color:var(--muted);}
+.signed-user {margin-top:0;}
+.workbench-hero {padding:34px;border:1px solid var(--border);border-radius:16px;background:linear-gradient(130deg,#fff 40%,#f1efff);margin-bottom:24px;}
+.workbench-hero h2 {font-size:clamp(1.45rem,2.3vw,2rem);letter-spacing:-.03em;}
+.workbench-hero p {color:var(--muted);max-width:68ch;}
+.workbench-hero .eyebrow {font-size:.85rem;color:var(--primary);}
+.overview-metrics {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;}
+.metric-card {display:grid;gap:10px;color:inherit;}
+.metric-card:hover {text-decoration:none;border-color:#bbb4ef;}
+.metric-card span {color:var(--muted);}
+.metric-card strong {font-size:1.65rem;}
+.metric-card small {color:var(--primary);}
+.workbench-columns {align-items:start;}
+.section-title {display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:16px;}
+.workbench-item {display:flex;justify-content:space-between;gap:16px;padding:16px 0;border-top:1px solid var(--border);color:inherit;}
+.workbench-item strong {max-width:70%;overflow-wrap:anywhere;}
+.page-intro {margin-bottom:22px;}
+.ops-app-row {display:flex;justify-content:space-between;align-items:center;gap:16px;color:inherit;}
+.ops-app-row:hover {text-decoration:none;border-color:#bbb4ef;}
+.ops-app-row p {margin:8px 0 0;}
+.app-operations-list {display:grid;gap:12px;}
+@media (max-width:760px) {
+  .overview-metrics {grid-template-columns:1fr;}
+  .workbench-hero {padding:24px;}
+  .workbench-columns {grid-template-columns:1fr;}
+}
