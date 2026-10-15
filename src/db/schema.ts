@@ -374,6 +374,6 @@ export const hostedReleases = pgTable("hosted_releases", {
   updatedAt: timestamp("updated_at", {withTimezone:true}).defaultNow().notNull(),
 }, t => [
   index("hosted_releases_app_created_idx").on(t.appId,t.createdAt),
-  check("hosted_releases_environment_check", sql`${t.environment} IN (\'TEST\',\'PRODUCTION\')`),
-  check("hosted_releases_status_check", sql`${t.status} IN (\'REQUESTING\',\'BUILDING\',\'WAITING_PR\',\'DEPLOYING\',\'READY\',\'FAILED\',\'NEEDS_RECONCILIATION\')`),
+  check("hosted_releases_environment_check", sql`${t.environment} IN ('TEST','PRODUCTION')`),
+  check("hosted_releases_status_check", sql`${t.status} IN ('REQUESTING','BUILDING','WAITING_PR','DEPLOYING','READY','FAILED','NEEDS_RECONCILIATION')`),
 ]);
