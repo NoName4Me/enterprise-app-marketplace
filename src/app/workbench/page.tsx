@@ -25,6 +25,7 @@ export default async function Workbench() {
     </section>
     <div className="overview-metrics">
       <Link className="card metric-card" href="/my/apps"><span>我管理的应用</span><strong>{apps.length}</strong><small>查看版本和运行情况 →</small></Link>
+      <Link className="card metric-card" href="/requests"><span>申请与审批</span><strong>处理</strong><small>查看申请和需要处理的待办 →</small></Link>
       <Link className="card metric-card" href="/requirements"><span>进行中的需求</span><strong>{open.length}</strong><small>查看沟通和交付进度 →</small></Link>
       <Link className="card metric-card" href="/operations"><span>运行工作台</span><strong>进入</strong><small>健康、发布、AI 诊断 →</small></Link>
     </div>

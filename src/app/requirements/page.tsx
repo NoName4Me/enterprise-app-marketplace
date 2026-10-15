@@ -13,7 +13,10 @@ export default async function Requirements({searchParams}:{searchParams:Promise<
   const rows=await listRequirements({id:current.id});
   return <SiteNav user={current} title="需求中心">
     <p className="muted">从员工问题到维护者处理，研发实现仍在 GitHub。P5 可从关联需求启动现成 Coding Agent。</p>
-    <RequirementCreate appId={appId} />
+    <details className="requirement-new" open={Boolean(appId)}>
+      <summary>＋ 提出新需求</summary>
+      <RequirementCreate appId={appId} />
+    </details>
     <h2>最近需求</h2>
     <div className="stack">{rows.map(row=><Link key={row.id} className="card" href={"/requirements/"+row.id}>
       <div className="actions"><strong>{row.title}</strong><span className="tag">{states[row.status]}</span></div>

@@ -13,6 +13,11 @@ export default async function MyApps() {
   if (!current) redirect("/login");
   const apps = await listOwnedApplications({ id: current.id });
   return <SiteNav user={current} title="我的应用">
+    <nav className="app-index-tabs" aria-label="应用分区">
+      <Link href="/apps">应用市场</Link>
+      <Link href="/my/apps" aria-current="page">我管理的</Link>
+      <Link href="/favorites">已收藏</Link>
+    </nav>
     <div className="actions">
       <p className="muted">管理你负责的应用，查看交付、发布与运行状态。</p>
       {mayCreateApp(current) && <Link className="button" href="/my/apps/new">接入应用</Link>}
