@@ -3,7 +3,7 @@ import type { DeliveryInput, DeliverySnapshot } from "./contracts";
 import type * as activities from "./activities";
 
 export const deliveryStatus = defineQuery<DeliverySnapshot>("deliveryStatus");
-export const reviewDeliveryPlan = defineSignal<["APPROVE" | "REJECT"]>("reviewDeliveryPlan");
+export const reviewDeliveryPlan = defineSignal<["APPROVE" | "REJECT", string]>("reviewDeliveryPlan");
 
 const { prepareDeliveryPlan } = proxyActivities<Pick<typeof activities, "prepareDeliveryPlan">>({
   startToCloseTimeout: "45 seconds",
@@ -24,8 +24,11 @@ export async function deliveryWorkflow(input: DeliveryInput): Promise<DeliverySn
   };
   let decision: "APPROVE" | "REJECT" | null = null;
   setHandler(deliveryStatus, () => state);
-  setHandler(reviewDeliveryPlan, value => {
-    if (state.stage === "AWAITING_APPROVAL" && decision === null) decision = value;
+  setHandler(reviewDeliveryPlan, (value, actorId) => {
+    if (state.stage === "AWAITING_APPROVAL" && decision === null) {
+      decision = value;
+      state = { ...state, note: "人工决策："+value+"；操作人："+actorId };
+    }
   });
   state = { ...state, plan: await prepareDeliveryPlan(input), stage: "AWAITING_APPROVAL",
     note: "等待应用负责人确认方案；未经确认不得启动编码或发布。" };
@@ -37,8 +40,9 @@ export async function deliveryWorkflow(input: DeliveryInput): Promise<DeliverySn
   try { dispatch = await createCodingTask(input, state.plan!); }
   catch { return { ...state, stage: "NEEDS_RECONCILIATION",
     note: "外部请求可能已执行，但响应未知；停止自动重试，须先核对 GitHub。" }; }
-  if (dispatch.outcome === "UNKNOWN") return { ...state, stage: "NEEDS_RECONCILIATION", note: dispatch.reason };
-  if (dispatch.outcome === "REJECTED") return { ...state, stage: "PROVIDER_REJECTED", note: dispatch.reason };
+  if (dispatch.outcome !== "ACCEPTED") return { ...state,
+    stage: dispatch.outcome === "UNKNOWN" ? "NEEDS_RECONCILIATION" : "PROVIDER_REJECTED",
+    note: dispatch.reason };
   state = { ...state, stage: "AGENT_RUNNING", externalTaskId: dispatch.taskId, note: "GitHub Coding Agent 执行中；PR 和 CI 尚未核验。" };
 
   // Bounded polling in first cut; later replace with webhook/signal and Continue-as-New.

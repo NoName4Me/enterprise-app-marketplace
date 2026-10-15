@@ -19,7 +19,8 @@
     "test:db": "vitest run --config vitest.db.config.ts",
     "test:e2e": "playwright test",
     "temporal:worker": "tsx src/temporal/worker.ts",
-    "temporal:check": "tsc --noEmit"
+    "temporal:check": "tsc --noEmit",
+    "temporal:bundle": "tsx src/temporal/bundle-check.ts"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.7.6",

@@ -83,6 +83,7 @@ jobs:
         run: |
           node --test scripts/p4-open-promotion.test.mjs lab/test-service/server.test.mjs
           pnpm typecheck
+          pnpm temporal:bundle
           pnpm lint
           pnpm build
       - name: Existing unit tests (master)

@@ -59,13 +59,15 @@ export async function getDelivery(actor:Actor|null,requirementId:string) {
   });
 }
 export async function reviewDelivery(actor:Actor|null,requirementId:string,decision:"APPROVE"|"REJECT") {
-  await permittedOwner(actor,requirementId);
+  const {req,actorData}=await permittedOwner(actor,requirementId);
+  const repository=await sourceRepo(req.appId!);
   const workflowId=workflowIdFor(requirementId);
   return withClient(async client=>{
     const handle=client.getHandle(workflowId);
     const snapshot=await handle.query<DeliverySnapshot>("deliveryStatus");
-    if(snapshot.stage!=="AWAITING_APPROVAL")throw new AppError(409,"delivery_not_ready");
-    await handle.signal("reviewDeliveryPlan",decision);
+    if(snapshot.stage!=="AWAITING_APPROVAL" || snapshot.repository!==repository)
+      throw new AppError(409,"delivery_not_ready");
+    await handle.signal("reviewDeliveryPlan",decision,actorData.id);
     return {state:"SIGNAL_ACCEPTED",workflowId,
       note:"Temporal 接受审批信号，工作流稍后推进。信号已送达不代表 Coding Agent 启动成功。"};
   });
