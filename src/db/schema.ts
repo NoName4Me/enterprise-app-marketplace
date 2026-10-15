@@ -342,3 +342,19 @@ export const codingTasks = pgTable("coding_tasks", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, t => [unique("coding_tasks_requirement_unique").on(t.requirementId)]);
+
+// Platform-managed NodePort reservations; RESERVED never means the endpoint works.
+export const appHostedPorts = pgTable("app_hosted_ports", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  appId: uuid("app_id").notNull().references(() => applications.id, { onDelete:"restrict" }),
+  environment: text("environment", { enum:["TEST","PRODUCTION"] }).notNull(),
+  nodePort: integer("node_port").notNull(),
+  state: text("state", { enum:["RESERVED","DEPLOYING","READY","FAILED"] }).default("RESERVED").notNull(),
+  imageDigest: text("image_digest"),
+  verifiedAt: timestamp("verified_at", { withTimezone:true }),
+  createdAt: timestamp("created_at", { withTimezone:true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone:true }).defaultNow().notNull(),
+}, t => [
+  unique("hosted_ports_app_environment_unique").on(t.appId,t.environment),
+  unique("hosted_ports_node_port_unique").on(t.nodePort),
+]);

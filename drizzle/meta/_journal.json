@@ -71,6 +71,13 @@
       "when": 1791975000000,
       "tag": "0009_application_source",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791978000000,
+      "tag": "0010_hosted_ports",
+      "breakpoints": true
     }
   ]
 }
