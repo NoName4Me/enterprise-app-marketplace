@@ -9,12 +9,6 @@ const REPO = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9_.-]{1,100}$/;
 function allowedRepositories() {
   return new Set((process.env.P5_ALLOWED_REPOS ?? "").split(",").map(x => x.trim().toLowerCase()).filter(Boolean));
 }
-function headers() {
-  const key = process.env.P5_COPILOT_USER_TOKEN?.trim();
-  if (!key) throw new AppError(422, "p5_copilot_not_configured");
-  return { Authorization: "Bearer " + key, Accept: "application/vnd.github+json",
-    "Content-Type": "application/json", "X-GitHub-Api-Version": "2022-11-28" };
-}
 export async function permittedOwner(actor: Actor | null, requirementId: string, allowClosed = false) {
   const actorData = await authorizeActor(actor, "create");
   const req = await getRequirement(actor, requirementId);
