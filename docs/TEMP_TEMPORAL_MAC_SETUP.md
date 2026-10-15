@@ -61,3 +61,7 @@ P3：AI 拆解 → 人审 → 新仓库模板；P5/P6：编码 → PR/CI → 人
 ## PR 与 CI 核验关口（第二切片）
 
 Agent 结束后状态 AWAITING_PR_REVIEW，负责人输入 PR 编号并由 Temporal Activity 调用 GitHub 检查：PR 已合并到 dev、描述含 Portal-Requirement-ID: <需求UUID>、合并 SHA 上所有 Check Runs 均成功。缺少任何条件继续等待，不能推断 CI 通过。通过后状态为 AWAITING_TEST_RELEASE，**仍需后续 GitOps/Argo 工作流验证部署，当前并未自动发布**。
+
+## 业务级唯一性
+
+启动交付工作流前在现有 coding_tasks 表中插入一条由 requirement_id 唯一约束保护的预约记录。Temporal start 成功转为 ACCEPTED；网络超时/返回不确定则标记 UNKNOWN，**不能自动重派**，需先核对 Temporal UI 和 GitHub。Temporal 的工作流 ID 重用策略 REJECT_DUPLICATE 只覆盖服务端保留历史；DB 预约记录提供跨历史保留期的业务唯一性。数据仍不代表发布成功。

@@ -23,24 +23,39 @@ async function withClient<T>(callback: (client: WorkflowClient) => Promise<T>):P
 }
 
 export async function startDelivery(actor: Actor|null, requirementId: string) {
-  const {req}=await permittedOwner(actor,requirementId);
+  const {req,actorData}=await permittedOwner(actor,requirementId);
   const repository=await sourceRepo(req.appId!);
-  const [legacy]=await db.select({id:codingTasks.id}).from(codingTasks)
-    .where(eq(codingTasks.requirementId,req.id)).limit(1);
-  if(legacy) throw new AppError(409,"coding_task_exists");
-  const input: DeliveryInput = {
+  // Business-level idempotency survives Temporal history retention and server replacement.
+  // UNIQUE(requirement_id) already exists in P5 coding_tasks; do not create a second task.
+  const [reserved]=await db.insert(codingTasks).values({
+    requirementId:req.id,createdBy:actorData.id,repository,state:"REQUESTING",
+  }).onConflictDoNothing().returning({id:codingTasks.id});
+  if(!reserved)throw new AppError(409,"coding_task_exists");
+  const input: DeliveryInput={
     requirementId:req.id,repository,title:req.title,description:req.description,
     type:req.type as DeliveryInput["type"],
   };
   const workflowId=workflowIdFor(req.id);
-  return withClient(async client => {
-    await client.start("deliveryWorkflow", {
-      taskQueue: DELIVERY_QUEUE,workflowId,args:[input],
-      workflowIdReusePolicy: "REJECT_DUPLICATE", // prevent recreating after an earlier completion.
-      workflowIdConflictPolicy: "FAIL",
+  try {
+    const started=await withClient(async client=>{
+      await client.start("deliveryWorkflow",{
+        taskQueue:DELIVERY_QUEUE,workflowId,args:[input],
+        workflowIdReusePolicy:"REJECT_DUPLICATE",
+        workflowIdConflictPolicy:"FAIL",
+      });
+      return {state:"STARTED",workflowId,
+        note:"Temporal 已受理，持久执行记录创建；下一步由 Worker 分析需求。"};
     });
-    return {state:"STARTED",workflowId,note:"Temporal 已受理工作流，等待 Worker 分析需求。"};
-  });
+    await db.update(codingTasks).set({state:"ACCEPTED",updatedAt:new Date()})
+      .where(eq(codingTasks.id,reserved.id));
+    return started;
+  } catch(error) {
+    // A timeout after start may mean Temporal already accepted the workflow.
+    // Keep the reservation to prevent duplicates until an operator reconciles it.
+    await db.update(codingTasks).set({state:"UNKNOWN",updatedAt:new Date()})
+      .where(eq(codingTasks.id,reserved.id));
+    throw error;
+  }
 }
 export async function getDelivery(actor:Actor|null,requirementId:string) {
   await permittedOwner(actor,requirementId,true);
