@@ -10,8 +10,8 @@ export default async function NewApplication() {
   const current = await getPageUser(await headers());
   if (!current) redirect("/login");
   if (!mayCreateApp(current)) redirect("/my/apps");
-  return <SiteNav user={current} title="登记新应用">
-    <p className="muted">这里只登记已经存在的 Web 应用。审核通过前不会出现在应用市场。</p>
+  return <SiteNav user={current} title="接入应用">
+    <p className="muted">选择接入已有应用，或连接 GitHub 仓库创建托管应用。两种应用都不需要手动填写组件与环境。</p>
     <ApplicationForm mode="create" />
   </SiteNav>;
 }

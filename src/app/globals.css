@@ -304,3 +304,15 @@ p { line-height: 1.75; overflow-wrap: anywhere; }
   .workbench-hero {padding:24px;}
   .workbench-columns {grid-template-columns:1fr;}
 }
+
+.app-create-form {display:grid;gap:19px;max-width:860px;}
+.app-create-form .two-columns {margin:0;}
+.app-source-choice {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.app-source-choice .source-option {display:flex;flex-direction:column;align-items:flex-start;text-align:left;background:#fff;color:var(--foreground);border:1px solid var(--border);padding:21px;white-space:normal;gap:10px;min-height:116px;}
+.app-source-choice .source-option:hover {background:var(--primary-soft);}
+.app-source-choice .source-option.selected {border-color:var(--primary);background:var(--primary-soft);}
+.app-source-choice .source-option span {color:var(--muted);font-weight:400;line-height:1.65;}
+.app-create-form .form-block {display:grid;gap:12px;}
+.app-create-form .form-block p {margin:0;}
+.optional-fields summary {cursor:pointer;color:var(--primary);margin:10px 0;}
+@media(max-width:760px) {.app-source-choice {grid-template-columns:1fr;}}
