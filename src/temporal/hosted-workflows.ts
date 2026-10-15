@@ -71,7 +71,7 @@ export async function hostedReleaseWorkflow(input:HostedReleaseInput):Promise<Ho
     await move("VERIFYING","验证 Argo CD 实际健康、镜像 Digest 和应用 NodePort");
     for(let i=0;i<60;i++){
       await sleep("1 minute");
-      const health=await probeHostedArgo(input,state.imageDigest);
+      const health=await probeHostedArgo(input,state.imageDigest!);
       if(health.ready){
         state={...state,testedAt:new Date().toISOString()};
         await move("READY","Argo 已同步且从工作节点访问 NodePort 成功；仍须 Mac 客户端确认 LAN 可达");
