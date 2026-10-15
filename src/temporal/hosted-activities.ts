@@ -3,6 +3,7 @@ import {db} from "../db/client";
 import {hostedReleases,appHostedPorts} from "../db/schema";
 import type {HostedReleaseInput,HostedReleaseSnapshot,ExternalAction,BuildProgress,GitopsResult} from "./hosted-contracts";
 import {renderHostedManifest} from "../../scripts/p4-hosted-manifest.mjs";
+import {trustedRun,trustedBuildImage} from "./hosted-proof";
 
 const githubApi="https://api.github.com";
 const gitopsRepo="NoName4Me/enterprise-app-marketplace";
@@ -109,26 +110,17 @@ export async function pollHostedBuild(input:HostedReleaseInput,runId:string,sour
     const runResponse=await gh("/repos/"+input.repository+"/actions/runs/"+runId,access);
     if(!runResponse.ok)return {kind:"WAIT"};
     const run=await json(runResponse);
-    const path=str(run.path);
-    if(run.event!=="workflow_dispatch"||!path.includes(".github/workflows/marketplace-build.yml"))
-      return {kind:"FAILED",reason:"工作流身份不符合可信构建约定"};
     if(run.status!=="completed")return {kind:"WAIT"};
-    if(run.conclusion!=="success")return {kind:"FAILED",reason:"GitHub 构建失败或未通过检查"};
+    if(!trustedRun(run))
+      return {kind:"FAILED",reason:"构建失败或工作流身份不符合受信来源"};
     const response=await gh("/repos/"+input.repository+"/deployments?sha="+sourceSha+
       "&environment=marketplace-build-artifact&per_page=100",access);
     if(!response.ok)return {kind:"WAIT"};
     const items=await response.json() as unknown;
-    if(!Array.isArray(items))return {kind:"WAIT"};
-    const matches=items.filter(item=>{
-      const row=value(item),payload=value(row.payload);
-      return num(payload.workflow_run_id)===Number(runId)&&
-        str(payload.app_id)===input.appId&&str(payload.source_sha)===sourceSha;
+    const image=trustedBuildImage(items,{
+      repository:input.repository,appId:input.appId,sha:sourceSha,runId
     });
-    if(matches.length!==1)return {kind:"WAIT"};
-    const payload=value(value(matches[0]).payload),image=str(payload.image);
-    const expected="ghcr.io/"+input.repository.toLowerCase()+"@sha256:";
-    if(!DIGEST.test(image)||!image.startsWith(expected))
-      return {kind:"FAILED",reason:"镜像不属于受控源仓库或没有不可变 Digest"};
+    if(!image)return {kind:"WAIT"};
     return {kind:"READY",imageDigest:image};
   }catch{return {kind:"WAIT"};}
 }
