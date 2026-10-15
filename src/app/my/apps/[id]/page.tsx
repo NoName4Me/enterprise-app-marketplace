@@ -91,8 +91,6 @@ export default async function ManagedApplication({params,searchParams}:{
       </>}
     </section>
     {hosted&&repo&&<HostedReleasePanel root={root} repo={repo}
-      testReady={testEndpoint?.state==="READY"}
-      testDigest={testEndpoint?.imageDigest??null}
       productionDigest={productionEndpoint?.imageDigest??null}/>}
     {hosted&&<ArgoCDLivePanel root={root} registered={2}/>}
   </div>}

@@ -26,9 +26,8 @@ function errorDescription(error:string){
   };
   return reasons[error]??"操作未成功，请检查仓库接入、授权和当前部署状态。";
 }
-export function HostedReleasePanel({root,repo,testReady,testDigest,productionDigest}:{
-  root:string;repo:string;
-  testReady:boolean;testDigest:string|null;productionDigest:string|null;
+export function HostedReleasePanel({root,repo,productionDigest}:{
+  root:string;repo:string;productionDigest:string|null;
 }){
   const router=useRouter();
   const [rows,setRows]=useState<Release[]>([]);
