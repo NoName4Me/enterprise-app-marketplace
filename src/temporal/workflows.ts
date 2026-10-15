@@ -45,7 +45,7 @@ export async function deliveryWorkflow(input: DeliveryInput): Promise<DeliverySn
   for (let attempt = 0; attempt < 240; attempt++) {
     await sleep("5 minutes");
     const progress = await getCodingTaskProgress(input.repository, dispatch.taskId);
-    state = { ...state, lastCheckedAt: new Date(0).toISOString(), note: progress.note };
+    state = { ...state, lastCheckedAt: new Date().toISOString(), note: progress.note };
     if (progress.kind === "DONE") return { ...state, stage: "AWAITING_PR_REVIEW",
       note: "Agent 执行结束；人工审查 PR/CI 后才能进入 GitOps 发布。" };
     if (progress.kind === "FAILED") return { ...state, stage: "FOLLOW_UP_REQUIRED",

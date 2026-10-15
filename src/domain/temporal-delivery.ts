@@ -1,5 +1,5 @@
 import { Connection, WorkflowClient } from "@temporalio/client";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { codingTasks } from "@/db/schema";
 import { AppError } from "./app-errors";
@@ -36,7 +36,8 @@ export async function startDelivery(actor: Actor|null, requirementId: string) {
   return withClient(async client => {
     await client.start("deliveryWorkflow", {
       taskQueue: DELIVERY_QUEUE,workflowId,args:[input],
-      workflowIdReusePolicy: 1, // REJECT_DUPLICATE (must not recreate after earlier completion).
+      workflowIdReusePolicy: "REJECT_DUPLICATE", // prevent recreating after an earlier completion.
+      workflowIdConflictPolicy: "FAIL",
     });
     return {state:"STARTED",workflowId,note:"Temporal 已受理工作流，等待 Worker 分析需求。"};
   });
