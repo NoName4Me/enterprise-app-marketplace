@@ -358,3 +358,22 @@ export const appHostedPorts = pgTable("app_hosted_ports", {
   unique("hosted_ports_app_environment_unique").on(t.appId,t.environment),
   unique("hosted_ports_node_port_unique").on(t.nodePort),
 ]);
+
+/** Durable request ledger; Temporal owns the execution history. */
+export const hostedReleases = pgTable("hosted_releases", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  appId: uuid("app_id").notNull().references(() => applications.id, {onDelete:"restrict"}),
+  environment: text("environment", {enum:["TEST","PRODUCTION"]}).notNull(),
+  requestedBy: text("requested_by").notNull().references(() => user.id, {onDelete:"restrict"}),
+  status: text("status", {enum:["REQUESTING","BUILDING","WAITING_PR","DEPLOYING","READY","FAILED","NEEDS_RECONCILIATION"]}).notNull().default("REQUESTING"),
+  workflowId: text("workflow_id").notNull().unique(),
+  sourceSha: text("source_sha"), buildRunId: text("build_run_id"),
+  imageDigest: text("image_digest"), gitopsPrNumber: integer("gitops_pr_number"),
+  note: text("note").notNull().default(""),
+  createdAt: timestamp("created_at", {withTimezone:true}).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", {withTimezone:true}).defaultNow().notNull(),
+}, t => [
+  index("hosted_releases_app_created_idx").on(t.appId,t.createdAt),
+  check("hosted_releases_environment_check", sql`${t.environment} IN (\'TEST\',\'PRODUCTION\')`),
+  check("hosted_releases_status_check", sql`${t.status} IN (\'REQUESTING\',\'BUILDING\',\'WAITING_PR\',\'DEPLOYING\',\'READY\',\'FAILED\',\'NEEDS_RECONCILIATION\')`),
+]);
