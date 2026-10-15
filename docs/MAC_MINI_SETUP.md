@@ -144,7 +144,7 @@ kubectl apply -f p4/temporal/worker.yaml
 kubectl -n marketplace rollout status deployment/marketplace-portal --timeout=240s
 kubectl -n marketplace rollout status deployment/portal-temporal-worker --timeout=240s
 kubectl -n marketplace logs deployment/portal-temporal-worker --tail=80
-curl -fsS http://portal.k8s.orb.local/api/health
+# 完成下一节 Traefik 安装后再用 curl 验证入口域名
 ```
 
 OrbStack 的 Docker 与 Kubernetes 可能复用容器镜像存储，但**必须以本机 Pod 是否能拉取本地镜像为准**。如遇 `ImagePullBackOff`，检查 OrbStack 的 Kubernetes 镜像可见性；改用本机可访问的镜像仓库或 GHCR ARM64 Digest，再调整 Deployment 镜像，不要复制真实密钥到镜像里。
@@ -162,6 +162,30 @@ kubectl create namespace argo-rollouts --dry-run=client -o yaml | kubectl apply 
 kubectl apply -n argo-rollouts -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml
 helm repo add traefik https://traefik.github.io/charts
 helm upgrade --install traefik traefik/traefik -n traefik --create-namespace --set service.type=LoadBalancer
+kubectl -n argocd rollout status deployment/argocd-server --timeout=240s
+kubectl -n argo-rollouts rollout status deployment/argo-rollouts --timeout=240s
+# 仅本机实验：Portal 通过 cluster-local HTTP 访问内部 Argo API；勿向外网公开管理服务。
+kubectl -n argocd patch cm argocd-cmd-params-cm --type merge -p '{"data":{"server.insecure":"true"}}'
+kubectl -n argocd rollout restart deployment/argocd-server
+kubectl -n argocd rollout status deployment/argocd-server --timeout=240s
+curl -fsS http://portal.k8s.orb.local/api/health
+```
+
+核心发布实验（都在**仓库 dev** 对应版本执行，不要求另装 Linux VM）：
+
+```sh
+# 在门户中先登记测试应用和 TEST 环境，并记下两个 UUID
+node scripts/p4-bootstrap.mjs <应用UUID> <环境UUID> > /tmp/marketplace-p4-app.yaml
+kubectl apply -f /tmp/marketplace-p4-app.yaml
+kubectl -n argocd get applications
+# 先按 lab-publish.yml 从当前 master 的可信完整 CI 生成 healthy 镜像 Digest
+# 再以成功 lab-publish Run ID 申请 GitOps PR，需人工审核合并到 dev：
+GH_TOKEN="$(gh auth token)" node scripts/p4-open-promotion.mjs <发布RunID> healthy
+kubectl -n marketplace-lab get rollout,pod,svc,ingress
+kubectl argo rollouts get rollout marketplace-lab -n marketplace-lab --watch
+# 蓝绿预览验证后再按需 promote，不能把 GitOps Synced 当成流量切换：
+kubectl argo rollouts promote marketplace-lab -n marketplace-lab
+curl -fsS http://lab.k8s.orb.local/version
 ```
 
 详细的 LAB 应用 UUID/环境 UUID 绑定和不可变 GHCR Digest → GitOps PR → 蓝绿测试动作保留在 `p4/gitops/lab/` 与 `scripts/p4-bootstrap.mjs` / `scripts/p4-open-promotion.mjs`。它**仍是单应用实验，尚非通用 P4 发布适配器**；Argo Sync/Healthy 不等于真实流量已经切换。
@@ -175,6 +199,18 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm upgrade --install monitor prometheus-community/kube-prometheus-stack -n monitoring --create-namespace \
   --set alertmanager.enabled=false --set prometheus.prometheusSpec.retention=2d
 kubectl -n monitoring get pods
+```
+
+按需安装 Loki / Alloy（若资源紧张，先完成 Temporal/Argo 核心链路，再安装）：
+
+```sh
+helm repo add grafana-community https://grafana-community.github.io/helm-charts
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+helm upgrade --install loki grafana-community/loki -n monitoring -f p4/observability/loki-values.yaml
+helm upgrade --install alloy grafana/alloy -n monitoring -f p4/observability/alloy-values.yaml
+kubectl apply -f p4/observability/lab-service-monitor.yaml
+kubectl apply -f p4/observability/lab-alert-rule.yaml
 ```
 
 完成核心服务稳定运行后，才视内存余量安装 `p4/observability/loki-values.yaml`、`alloy-values.yaml` 与 `lab-service-monitor.yaml`、`lab-alert-rule.yaml`。当前 Grafana/Loki 版本和 Helm 配置仍需本地联调，不应在安装报错时清空 PVC。
