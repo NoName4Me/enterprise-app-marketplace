@@ -50,6 +50,21 @@ jobs:
           pnpm db:generate
           git diff --exit-code -- drizzle/
           test -z "$(git ls-files --others --exclude-standard drizzle/)"
+      - name: Validate Temporal/OrbStack deployment contract (PR)
+        if: github.event_name == 'pull_request'
+        run: node --test scripts/p4-infra.test.mjs
+      - name: Render pinned official Temporal Helm Chart (PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/src:ro" -w /src alpine/helm:3.17.3 \
+            template temporal temporal --repo https://go.temporal.io/helm-charts/ \
+            --version 1.7.0 --namespace temporal -f p4/temporal/values.yaml > /tmp/p4-temporal.yaml
+          test -s /tmp/p4-temporal.yaml
+          grep -q 'temporal-frontend' /tmp/p4-temporal.yaml
+      - name: Build standalone Temporal Activity Worker container (PR)
+        if: github.event_name == 'pull_request'
+        run: docker build -f p4/temporal/Dockerfile.worker -t portal-temporal-worker:ci .
       - name: Bootstrap initial administrator (isolated fixture database)
         if: github.event_name == 'push'
         run: |
