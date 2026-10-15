@@ -316,3 +316,26 @@ p { line-height: 1.75; overflow-wrap: anywhere; }
 .app-create-form .form-block p {margin:0;}
 .optional-fields summary {cursor:pointer;color:var(--primary);margin:10px 0;}
 @media(max-width:760px) {.app-source-choice {grid-template-columns:1fr;}}
+
+.back-link {display:inline-block;margin-bottom:18px;color:var(--muted);}
+.app-profile-header {display:flex;align-items:flex-start;justify-content:space-between;gap:22px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:27px;margin-bottom:20px;}
+.app-profile-header h2 {font-size:1.6rem;margin:4px 0 8px;}
+.app-profile-header p:not(.eyebrow) {margin:0;color:var(--muted);}
+.app-profile-header .eyebrow {margin:0;color:var(--primary);}
+.app-profile-status {display:flex;flex-wrap:wrap;gap:7px;}
+.app-detail-tabs {display:flex;align-items:center;gap:22px;border-bottom:1px solid var(--border);margin-bottom:24px;overflow:auto;}
+.app-detail-tabs a {color:var(--muted);padding:13px 4px;border-bottom:2px solid transparent;white-space:nowrap;}
+.app-detail-tabs a[aria-current="page"] {color:var(--primary);border-bottom-color:var(--primary);font-weight:650;}
+.app-detail-tabs a:hover {text-decoration:none;color:var(--foreground);}
+.app-status-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;}
+.app-status-tile {display:grid;gap:10px;}
+.app-status-tile span {color:var(--muted);}
+.app-status-tile strong {font-size:1rem;}
+.quick-links {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
+.quick-links a {border:1px solid var(--border);border-radius:9px;padding:19px;color:var(--foreground);display:flex;justify-content:space-between;}
+.quick-links a:hover {background:var(--primary-soft);text-decoration:none;}
+.quick-links span {color:var(--primary);}
+.release-lanes {display:grid;grid-template-columns:1fr 1fr;gap:15px;margin:22px 0;}
+.release-lanes article {background:var(--background);border-radius:10px;padding:20px;border:1px solid var(--border);}
+.release-lanes h4 {margin:0 0 12px;}
+@media(max-width:760px){.app-profile-header{flex-direction:column;}.app-status-grid,.quick-links,.release-lanes{grid-template-columns:1fr;}}
