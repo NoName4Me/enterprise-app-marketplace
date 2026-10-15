@@ -57,9 +57,12 @@ export async function recordHostedRelease(snapshot:HostedReleaseSnapshot):Promis
       }).where(and(eq(appHostedPorts.appId,release.appId),
         eq(appHostedPorts.environment,release.environment)));
     } else if(status==="DEPLOYING"||status==="WAITING_PR"){
+      // Keep an already-verified live release accessible during an upgrade.
+      // Do not replace its READY pointer until the new digest is proven healthy.
       await tx.update(appHostedPorts).set({state:"DEPLOYING",updatedAt:new Date()})
         .where(and(eq(appHostedPorts.appId,release.appId),
-          eq(appHostedPorts.environment,release.environment)));
+          eq(appHostedPorts.environment,release.environment),
+          eq(appHostedPorts.state,"RESERVED")));
     }
     // Keep previously verified endpoints available on a failed upgrade,
     // until the system has evidence they are actually unhealthy.
