@@ -59,7 +59,15 @@ export async function startDelivery(actor: Actor|null, requirementId: string) {
 }
 export async function getDelivery(actor:Actor|null,requirementId:string) {
   await permittedOwner(actor,requirementId,true);
+  const [reservation]=await db.select({
+    state:codingTasks.state,externalTaskId:codingTasks.externalTaskId,
+  }).from(codingTasks).where(eq(codingTasks.requirementId,requirementId)).limit(1);
   const workflowId=workflowIdFor(requirementId);
+  // An older, direct Copilot task must never be mistaken for an unstarted Workflow.
+  if(reservation?.externalTaskId)return {
+    state:"LEGACY_EXTERNAL_TASK",workflowId,
+    note:"该需求存在旧版直接 Copilot 任务："+reservation.externalTaskId+"；须先在 GitHub 人工核对，不能自动转为 Temporal 任务。",
+  };
   return withClient(async client=>{
     const handle=client.getHandle(workflowId);
     try {
@@ -68,7 +76,9 @@ export async function getDelivery(actor:Actor|null,requirementId:string) {
       return {state:"RUNNING",workflowId,snapshot};
     } catch(error) {
       if(error instanceof Error && error.name==="WorkflowNotFoundError")
-        return {state:"NOT_STARTED",workflowId,note:"该需求尚未启动 Temporal 工作流。"};
+        return reservation
+          ? {state:"NEEDS_RECONCILIATION",workflowId,note:"已有业务任务预约（"+reservation.state+"），但 Temporal 未找到执行；须人工核对再处理，不能重复派发。"}
+          : {state:"NOT_STARTED",workflowId,note:"该需求尚未启动 Temporal 工作流。"};
       throw error;
     }
   });
