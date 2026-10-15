@@ -10,3 +10,4 @@
 - 技术选型须独立评估正确性、时效性、Bug 和替代方案；重要产品/不可逆架构变更集中评审，普通实现由 Work 自主处理。
 
 Git 标题：中文 Conventional Commits，如 `feat(scope): 中文说明`、`fix(scope): 中文说明`，允许 feat/fix/docs/refactor/test/build/ci/chore/perf/revert。PR 标题同规范，优先 Squash；必需 GitHub checks `check`/`validate` 不可无故改名。
+- 2026-10-15 产品体验决议：顶层任务导航收敛为工作台/应用/需求/运行中心；普通用户不填写组件、环境、Run ID 或 Argo 关联。托管应用自动建测试+生产资源；访问方式优先固定 IP + 每环境独立 NodePort；仅真实 READY+已验证地址可展示链接。原 P4 marketplace-lab 实验不能冒充通用发布器。

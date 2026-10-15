@@ -259,3 +259,15 @@ kubectl apply -f p4/observability/lab-alert-rule.yaml
 配置文件中的登录地址、镜像 Tag 仅供单机演示；正式使用应固定镜像 Digest、收敛 Secret 管理和部署版本。Temporal Chart 的 `numHistoryShards` 初始化后**不可随意修改**。所有真实密码只放 Mac 的本地 `.env.*` / K8s Secret，不能写进 GitOps 清单。**唯一的用户操作文档就是本文件**：旧 TEMP 指南仅作重定向。
 
 官方参考：[OrbStack Kubernetes](https://docs.orbstack.dev/kubernetes/)、[OrbStack Networking](https://docs.orbstack.dev/docker/network)、[Temporal 官方 Helm Chart](https://github.com/temporalio/helm-charts)、[Temporal Worker Deploy](https://docs.temporal.io/develop/typescript/workers)。
+
+## 本轮应用门户改版的增量部署（2026-10-15）
+
+Mac mini 核心环境已经部署完成，本轮**不要重跑完整安装步骤**。从最新 `dev` 合入镜像前，仅针对已有 `market` 数据库执行**增量** Drizzle 0009/0010 迁移：0009 为旧应用加 `source_kind=EXTERNAL` 默认值，新托管应用可登记仓库；0010 新增平台 NodePort 预约表。不要重建 PostgreSQL/Temporal/Argo，也不要清理卷。照项目原有数据库迁移流程先确认 DATABASE_URL 指向 `market`，备份后运行 `pnpm db:migrate`。
+
+### 固定 IP + 独立 NodePort
+- 不使用不同 `/path` 作为不同应用入口。测试和生产各预留一个平台端口，范围 `31000–31999`，由数据库唯一约束与事务锁避免**平台内部**冲突。
+- 管理员在**门户 K8s Secret** `portal-runtime` 对应本地环境文件设置 `HOSTED_PUBLIC_IP=<Mac 的稳定局域网 IPv4>`。此值仅用于已验证的 READY URL 展示，不能自动开放端口。
+- **先检查** `kubectl get svc -A -o wide` 是否已有其他服务使用同一端口；数据库预约不等于集群端口冲突检查。
+- 部署控制器必须先部署 Kubernetes Service `type: NodePort`，并实际从客户端执行 `curl http://<IP>:<port>/...` 或应用自己的健康探测，然后才能记录 READY+verifiedAt。OrbStack NodePort 是否从局域网可达**仍需实机验证**；若不通先调整受控入口映射，不要提前把预留 URL 暴露给员工。
+- 当前应用门户还没有可泛化的 GHCR 镜像构建和 Kubernetes 发布器，因此页面会明确提示尚未部署。旧 `marketplace-lab` 故障演练表单已从普通发布工作台移出；不删除底层存量记录。
+
