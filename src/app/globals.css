@@ -404,3 +404,7 @@ p { line-height: 1.75; overflow-wrap: anywhere; }
 .ops-chart-no-data {display:grid;place-items:center;height:150px;background:var(--background);color:var(--muted);border-radius:8px;}
 .ops-chart .muted {margin:10px 0 0;}
 @media(max-width:760px){.ops-chart-list{grid-template-columns:1fr;}}
+
+.draft-delete-section{border-color:#eed1d7;}
+.danger-button{background:#a73349;color:#fff;border:1px solid #a73349;}
+.danger-button:hover{background:#8c2338;}

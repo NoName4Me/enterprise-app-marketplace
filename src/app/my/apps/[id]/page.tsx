@@ -13,6 +13,7 @@ import { ArgoCDLivePanel } from "@/app/components/argocd-live-panel";
 import { DevopsEvidencePanel } from "@/app/components/devops-evidence-panel";
 import { ApplicationForm } from "../application-form";
 import { RevisionAction } from "../revision-action";
+import { DeleteDraftButton } from "../delete-draft-button";
 export const dynamic="force-dynamic";
 type View="overview"|"releases"|"operations"|"requirements"|"settings"|"advanced";
 const tabs:{view:View;label:string}[]=[
@@ -109,6 +110,9 @@ export default async function ManagedApplication({params,searchParams}:{
     {latest.status==="DRAFT"&&!editable&&<p className="notice">当前账号不能修改草稿。</p>}
     {latest.status==="PENDING"&&<p className="notice">应用信息正在审核，当前版本暂不可编辑。</p>}
     {(latest.status==="REJECTED"||latest.status==="APPROVED")&&editable&&<RevisionAction appId={id}/>}
+    {editable && app.listingStatus==="UNLISTED" && !app.publishedRevisionId &&
+      app.revisions.length===1 && latest.status==="DRAFT" &&
+      <DeleteDraftButton appId={id} appName={latest.name || "未命名应用"}/>}
     <section className="card"><h3>市场版本记录</h3>{app.revisions.map(rev=><article key={rev.id} className="workbench-item">
       <strong>第 {rev.sequence} 版 · {rev.name}</strong><span className="muted">{statusName(rev.status)}</span>
     </article>)}</section>
