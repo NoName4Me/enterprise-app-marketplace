@@ -71,9 +71,9 @@ export async function getDelivery(actor:Actor|null,requirementId:string) {
   return withClient(async client=>{
     const handle=client.getHandle(workflowId);
     try {
-      await handle.describe();
+      const description=await handle.describe();
       const snapshot=await handle.query<DeliverySnapshot>("deliveryStatus");
-      return {state:"RUNNING",workflowId,snapshot};
+      return {state:description.status.name,workflowId,snapshot};
     } catch(error) {
       if(error instanceof Error && error.name==="WorkflowNotFoundError")
         return reservation
