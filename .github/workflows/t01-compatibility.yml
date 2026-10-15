@@ -44,6 +44,9 @@ jobs:
         run: pnpm db:generate
       - name: Apply migration to isolated test database
         run: pnpm db:migrate
+      - name: Verify initial draft deletion on isolated PostgreSQL (PR)
+        if: github.event_name == 'pull_request'
+        run: pnpm exec vitest run --config vitest.db.config.ts tests/delete-draft.integration.test.ts
       - name: Verify P3/P5 migration metadata has no schema drift (PR)
         if: github.event_name == 'pull_request'
         run: |
