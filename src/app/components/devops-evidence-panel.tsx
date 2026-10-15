@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { DevopsEvidence } from "@/domain/devops-evidence";
 import type { Diagnosis } from "@/domain/devops-diagnosis";
 
@@ -15,7 +16,12 @@ function incident(e:DevopsEvidence){
   return {text:"健康状况尚不完整",tone:"unknown"};
  return {text:"未发现已接入信号中的异常",tone:"ok"};
 }
-export function DevopsEvidencePanel({root}:{root:string}){
+export function DevopsEvidencePanel({root,appId}:{root:string;appId?:string}){
+ const router=useRouter();
+ const [fixOpen,setFixOpen]=useState(false);
+ const [fixTitle,setFixTitle]=useState("调查并修复应用运行异常");
+ const [fixDescription,setFixDescription]=useState("");
+ const [fixPending,setFixPending]=useState(false);
  const [data,setData]=useState<DevopsEvidence|null>(null),[diagnosis,setDiagnosis]=useState<Diagnosis|null>(null);
  const [busy,setBusy]=useState<"evidence"|"diagnose"|null>(null),[error,setError]=useState("");
  async function load(type:"evidence"|"diagnose"){
@@ -31,6 +37,20 @@ export function DevopsEvidencePanel({root}:{root:string}){
    else{setData(value);setDiagnosis(null);}
   }catch{setError("无法访问运行服务，请检查网络连接。");}
   finally{setBusy(null);}
+ }
+ async function submitRepair(){
+  if(!appId||fixPending)return;
+  setFixPending(true);setError("");
+  try{
+   const response=await fetch("/api/requirements",{
+     method:"POST",headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({type:"BUG",appId,title:fixTitle,description:fixDescription}),
+   });
+   if(!response.ok)throw new Error("创建修复需求失败，请确认应用负责人权限及内容长度。");
+   const created=await response.json() as {id:string};
+   router.push("/requirements/"+created.id);
+  }catch(error){setError(error instanceof Error?error.message:"修复需求提交失败");}
+  finally{setFixPending(false);}
  }
  const overview=data?incident(data):null;
  const first=data?.argo.applications[0];
@@ -118,6 +138,22 @@ export function DevopsEvidencePanel({root}:{root:string}){
        <p className="muted">结果：{diagnosis.state} · 模型：{diagnosis.model??"未连接"} · {date(diagnosis.generatedAt)}</p>
        <div className="pre-wrap">{diagnosis.text}</div>
        <p className="muted">{diagnosis.note}</p>
+       {appId&&diagnosis.state==="OK"&&<div className="ops-repair-actions">
+        <button type="button" className="button-secondary" onClick={()=>{
+          setFixDescription(("AI 初步诊断（尚未经人工验证）：\n"+
+            diagnosis.text.slice(0,3200)+"\n\n请先核验事实、确认修复范围和回归测试标准。").slice(0,3800));
+          setFixOpen(true);
+        }}>整理为修复需求</button>
+        {fixOpen&&<div className="stack ops-repair-form">
+         <label>修复任务标题<input minLength={5} maxLength={140} value={fixTitle}
+            onChange={e=>setFixTitle(e.target.value)}/></label>
+         <label>待确认的修复说明<textarea rows={8} minLength={10} maxLength={4000}
+            value={fixDescription} onChange={e=>setFixDescription(e.target.value)}/></label>
+         <p className="muted">提交后形成与此应用关联的 BUG 需求；后续须人工审核方案，才能经 Temporal 派发编码任务，不会直接在服务器上执行修复。</p>
+         <button type="button" disabled={fixPending||fixTitle.length<5||fixDescription.length<10}
+            onClick={()=>void submitRepair()}>{fixPending?"提交中…":"确认创建修复需求"}</button>
+        </div>}
+       </div>}
       </div>:<p className="muted">尚未生成诊断。AI 不会在未经审批的情况下修改代码、重启或发布应用。</p>}
     </aside>
    </div>
