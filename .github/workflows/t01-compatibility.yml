@@ -78,7 +78,7 @@ jobs:
           fi
       - name: Complete fixture administrator first password change
         if: github.event_name == 'push'
-        run: node scripts/run-demo.mjs scripts/prepare-test-admin.ts
+        run: node scripts/run-demo.mjs
       - name: Generate auth schema reference
         if: github.event_name == 'push'
         run: pnpm dlx auth@1.7.6 generate --adapter drizzle --dialect postgresql --config ./src/lib/auth.ts --output ./auth-schema.generated.ts --yes

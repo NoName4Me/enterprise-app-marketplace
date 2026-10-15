@@ -7,8 +7,8 @@ import { pathToFileURL } from "node:url";
 const require = createRequire(import.meta.url);
 const tooling = createRequire(require.resolve("drizzle-kit"));
 const { build } = tooling("esbuild");
-const entry = process.argv[2] ?? "scripts/seed-demo.ts";
-if (!["scripts/seed-demo.ts", "scripts/prepare-test-admin.ts"].includes(entry)) throw new Error("Unsupported task script");
+const entry = "scripts/prepare-test-admin.ts";
+if (process.argv.length > 2) throw new Error("Fixture runner accepts no custom task.");
 const destination = resolve("node_modules/.cache/marketplace-demo.cjs");
 await mkdir(resolve("node_modules/.cache"), { recursive: true });
 await build({ entryPoints: [resolve(entry)], outfile: destination, bundle: true,
