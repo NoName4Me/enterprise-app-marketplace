@@ -1,4 +1,4 @@
-# Experimental standalone Loki; verify chart values before Mac installation.
+# Single-node OrbStack; verified with grafana-community/loki chart 18.15.1.
 deploymentMode: Monolithic
 loki:
   auth_enabled: false
@@ -19,6 +19,11 @@ loki:
     retention_period: 48h
 singleBinary:
   replicas: 1
+  resources:
+    requests:
+      memory: 128Mi
+    limits:
+      memory: 512Mi
   persistence:
     enabled: true
     size: 3Gi

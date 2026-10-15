@@ -1,6 +1,6 @@
 # Mac mini 统一服务器部署与验收（OrbStack Kubernetes）
 
-> **唯一主入口**。目标硬件：**一台 Mac mini M4 / 16GB**，已安装 OrbStack。**仅编写配置和操作步骤，未在用户 Mac 实测（NOT RUN）**。任何出现错误的步骤先停止并排查，不要重置/清空现有数据库或卷。关联：`p4/temporal/`、`p4/platform/`、`p4/gitops/lab/`、`p4/observability/`。
+> **唯一主入口**。目标硬件：**一台 Mac mini M4 / 16GB**，已安装 OrbStack。**已于 2026-10-15 在用户 Mac 完成本地核心部署与验证；云端 AI/真实发布仍为 NOT RUN**。任何出现错误的步骤先停止并排查，不要重置/清空现有数据库或卷。关联：`p4/temporal/`、`p4/platform/`、`p4/gitops/lab/`、`p4/observability/`。
 
 ## 0. 整体结构、取舍和边界
 
@@ -30,6 +30,7 @@
 
 ```sh
 orb start k8s
+# 缺少 Helm 时先安装：brew install helm
 kubectl config current-context
 kubectl get nodes -o wide
 docker compose -f compose.yaml ps postgres
@@ -41,10 +42,14 @@ kubectl top nodes || true
 先检查 `kubectl` 当前 Context **确实是 OrbStack**，不要误操作其他集群。**不要执行** `docker compose down -v`、`docker volume prune`、`orb delete k8s`、`pg_dropcluster`、`DROP DATABASE`。建议先备份已有 market 数据库（在 Mac 的受保护目录）：
 
 ```sh
+umask 077
 mkdir -p "$HOME/marketplace-backups"
-docker compose -f compose.yaml exec -T postgres pg_dump -U market -Fc market > "$HOME/marketplace-backups/market-before-p4.dump"
-test -s "$HOME/marketplace-backups/market-before-p4.dump"
+market_backup_path="$HOME/marketplace-backups/market-before-p4-$(date +%Y%m%d-%H%M%S).dump"
+docker compose -f compose.yaml exec -T postgres pg_dump -U market -Fc market > "$market_backup_path"
+test -s "$market_backup_path"
 ```
+
+若系统已有本机网络代理，但终端下载失败，先为下载命令设置 `HTTP_PROXY` / `HTTPS_PROXY`，并将 `localhost,127.0.0.1` 放入 `NO_PROXY`。OrbStack 可通过 `orb config set network_proxy <本机代理URL>` 显式使用同一代理；不要把代理凭据写入 Git。镜像构建依赖下载可使用 Docker 预定义代理 build args，例如 `--build-arg HTTP_PROXY=http://host.orb.internal:<端口> --build-arg HTTPS_PROXY=http://host.orb.internal:<端口>`（Pod 访问集群服务应绕过代理）。如果 BuildKit 在 `docker/dockerfile:1` 获取 Token 时仍 DNS 超时，先用 `docker pull docker/dockerfile:1` 检查代理；也可将 `tail -n +2 Dockerfile` 的内容传给 `docker build -f - .`，跳过外部 syntax frontend 下载，Worker 同理。
 
 16GB 单机先保持**所有服务单副本**，按 `kubectl top pods -A` 检查占用；Loki、Grafana 可以稍后启动。Node/Temporal/Argo 同时运行若出现 OOM，先调整副本及可选观测组件，不先添加新 VM。
 
@@ -106,11 +111,18 @@ password=<与 psql 中 temporal_user 相同的密码>
 kubectl -n temporal create secret generic temporal-db-secret --from-env-file=.env.temporal.pg --dry-run=client -o yaml | kubectl apply -f -
 helm upgrade --install temporal temporal/temporal --version 1.7.0 -n temporal \
   -f p4/temporal/values.yaml --wait --timeout 15m
+# 本机实测：短域名 temporal-frontend:7233 会超时，必须使用完整 Service DNS。
+# Chart 1.7.0 内置 namespace hook 使用短域名，因此 values.yaml 禁用该 hook。
+kubectl -n temporal run temporal-namespace-bootstrap --rm -i --restart=Never \
+  --image=temporalio/admin-tools:1.32.0 --command -- sh -ec \
+  'temporal --address temporal-frontend.temporal.svc.cluster.local:7233 operator namespace describe -n default || temporal --address temporal-frontend.temporal.svc.cluster.local:7233 operator namespace create -n default --retention 7d'
 kubectl -n temporal get pods,svc,jobs
 kubectl -n temporal logs deployment/temporal-frontend --tail=60
 ```
 
 其中 `values.yaml` 的 `createDatabase: false` 表示不会替你创建/覆盖数据库；`manageSchema: true` 由 **Temporal Helm 的 Schema Job** 初始化并升级 `temporal` / `temporal_visibility`。这两个库必须事先创建，数据库账号需要相应所有权。不要给 `market` 运行 Temporal 的 Schema 初始化。
+
+`server.publicClientHostPort` 与 `web.temporalAddress` 同样固定完整 Service DNS，避免内部 Worker 和 UI 使用短域名。`default` 命名空间创建完成后再部署业务 Worker。
 
 Temporal 内部 `temporal-worker` 是**服务器自己的系统服务**，而后文的 `portal-temporal-worker` 才是我们的业务 Activity Worker，两者必须区分。Temporal UI 仅在本机端口转发访问，避免未经验证的外部开放：
 
@@ -132,7 +144,7 @@ docker build --platform linux/arm64 -t marketplace/temporal-worker:dev -f p4/tem
 
 请在仓库根目录创建两个 Git 已忽略的**本地配置文件**（不会覆盖或修改你的现有 `.env`）：
 
-`.env.portal.k8s`：从现有 Mac `.env` **复制必要的服务端配置值**，其中 `DATABASE_URL` 改为 Pod 实测可达的 PG 主机名（**不是 localhost**），`BETTER_AUTH_URL=http://portal.k8s.orb.local` 与实际浏览器地址匹配；包含原 `BETTER_AUTH_SECRET`、DeepSeek API 和门户访问外部源所需的 Token。端口使用 `ARGOCD_SERVER_URL=http://argocd-server.argocd.svc.cluster.local`、`PROMETHEUS_SERVER_URL=http://monitor-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090`、`LOKI_SERVER_URL=http://loki-gateway.monitoring.svc.cluster.local:80`（后两者安装后才可用）。
+`.env.portal.k8s`：从现有 Mac `.env` **复制必要的服务端配置值**，其中 `DATABASE_URL` 改为 Pod 实测可达的 PG 主机名（**不是 localhost**），`BETTER_AUTH_URL=http://portal.k8s.orb.local` 与实际浏览器地址匹配；包含原 `BETTER_AUTH_SECRET`、DeepSeek API 和门户访问外部源所需的 Token。端口使用 `ARGOCD_SERVER_URL=http://argocd-server.argocd.svc.cluster.local`、`PROMETHEUS_SERVER_URL=http://monitor-kube-prometheus-st-prometheus.monitoring.svc.cluster.local:9090`、`LOKI_SERVER_URL=http://loki-gateway.monitoring.svc.cluster.local:80`（后两者安装后才可用；Prometheus Service 名以 `kubectl -n monitoring get svc` 为准，Chart 可能截断名称）。
 
 `.env.worker.k8s`：**只放 Activity Worker 需要的** `DEEPSEEK_API_KEY`（或 `AIOPS_LLM_API_KEY`）、`AIOPS_LLM_BASE_URL`、`AIOPS_LLM_MODEL`、`P5_COPILOT_USER_TOKEN`。不放门户会话 Secret、`DATABASE_URL` 或 Argo 发布凭据。
 
@@ -157,11 +169,11 @@ K8s 中 `TEMPORAL_ADDRESS` 由 Deployment **显式固定**为 `temporal-frontend
 
 ```sh
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.5/manifests/install.yaml
 kubectl create namespace argo-rollouts --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -n argo-rollouts -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml
+kubectl apply -n argo-rollouts --server-side -f https://github.com/argoproj/argo-rollouts/releases/download/v1.10.1/install.yaml
 helm repo add traefik https://traefik.github.io/charts
-helm upgrade --install traefik traefik/traefik -n traefik --create-namespace --set service.type=LoadBalancer
+helm upgrade --install traefik traefik/traefik --version 41.7.1 -n traefik --create-namespace --set service.type=LoadBalancer
 kubectl -n argocd rollout status deployment/argocd-server --timeout=240s
 kubectl -n argo-rollouts rollout status deployment/argo-rollouts --timeout=240s
 # 仅本机实验：Portal 通过 cluster-local HTTP 访问内部 Argo API；勿向外网公开管理服务。
@@ -170,6 +182,8 @@ kubectl -n argocd rollout restart deployment/argocd-server
 kubectl -n argocd rollout status deployment/argocd-server --timeout=240s
 curl -fsS http://portal.k8s.orb.local/api/health
 ```
+
+Rollouts CRD 较大，使用 `--server-side` 避免客户端 apply 的 annotation 超过 256 KiB。以上控制器版本为本机已验证版本。
 
 核心发布实验（都在**仓库 dev** 对应版本执行，不要求另装 Linux VM）：
 
@@ -196,8 +210,11 @@ curl -fsS http://lab.k8s.orb.local/version
 
 ```sh
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm upgrade --install monitor prometheus-community/kube-prometheus-stack -n monitoring --create-namespace \
-  --set alertmanager.enabled=false --set prometheus.prometheusSpec.retention=2d
+helm upgrade --install monitor prometheus-community/kube-prometheus-stack --version 92.7.0 -n monitoring --create-namespace \
+  --set alertmanager.enabled=false --set prometheus.prometheusSpec.retention=2d \
+  --set prometheus.prometheusSpec.resources.requests.memory=256Mi \
+  --set prometheus.prometheusSpec.resources.limits.memory=768Mi \
+  --set grafana.resources.requests.memory=64Mi --set grafana.resources.limits.memory=512Mi
 kubectl -n monitoring get pods
 ```
 
@@ -207,26 +224,35 @@ kubectl -n monitoring get pods
 helm repo add grafana-community https://grafana-community.github.io/helm-charts
 helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
-helm upgrade --install loki grafana-community/loki -n monitoring -f p4/observability/loki-values.yaml
-helm upgrade --install alloy grafana/alloy -n monitoring -f p4/observability/alloy-values.yaml
+helm upgrade --install loki grafana-community/loki --version 18.15.1 -n monitoring -f p4/observability/loki-values.yaml
+helm upgrade --install alloy grafana/alloy --version 1.13.1 -n monitoring -f p4/observability/alloy-values.yaml
 kubectl apply -f p4/observability/lab-service-monitor.yaml
 kubectl apply -f p4/observability/lab-alert-rule.yaml
 ```
 
-完成核心服务稳定运行后，才视内存余量安装 `p4/observability/loki-values.yaml`、`alloy-values.yaml` 与 `lab-service-monitor.yaml`、`lab-alert-rule.yaml`。当前 Grafana/Loki 版本和 Helm 配置仍需本地联调，不应在安装报错时清空 PVC。
+完成核心服务稳定运行后，才视内存余量安装 `p4/observability/loki-values.yaml`、`alloy-values.yaml` 与 `lab-service-monitor.yaml`、`lab-alert-rule.yaml`。本机已验证 Loki Chart 18.15.1 / Alloy Chart 1.13.1，包含单机内存限制；门户 Pod 查询 Loki 标签及 marketplace 日志成功。实验应用尚未部署，因此 ServiceMonitor/告警规则的业务信号仍为 NOT RUN。不应在安装报错时清空 PVC。
 
 ## 8. 从需求到发布的分层验证
 
-- [ ] 在 **Pod** 中验证现有 PostgreSQL 可达；`market` 原有数据未变化，`temporal`、`temporal_visibility` 独立建库。
-- [ ] Temporal Server 四类内部服务、Web UI 及应用 Activity Worker Ready，重启 Worker 后未完成的工作流可继续等待。
+- [x] 在 **Pod** 中验证现有 PostgreSQL 可达；保留 `market` 原有业务记录并执行增量迁移，`temporal`、`temporal_visibility` 独立建库。
+- [x] Temporal Server 四类内部服务、Web UI 及应用 Activity Worker Ready，重启 Worker 后未完成的工作流可继续等待。
 - [ ] 门户登录/需求中心/P5 代码任务仍可用，`TEMPORAL_ADDRESS` 是集群 Service 而非 Pod localhost。
 - [ ] 新需求由 Temporal 创建 Workflow → 云端 LLM 方案 → 人工批准 → Copilot 任务（需要用户 Token 和服务资格）。
 - [ ] Agent 完成后 PR 合并/CI 检查必须独立验证，才进入等待测试发布。**当前尚未自动调通 GitOps/Argo 发布的最后阶段**。
 - [ ] GitHub 可信 GHCR Digest → GitOps PR → Argo Sync → Rollout 蓝绿 Preview/Promote → `/version` 校验 active 实例。
 - [ ] 对 Temporal Server/Worker、门户和 Mac 重启进行恢复测试；检查 `kubectl top pods -A`，确认不 OOM。
-- [ ] 数据库备份/恢复演练：market、temporal、temporal_visibility **分别备份**，不要只备份门户。
+- [x] 数据库备份/恢复演练：market、temporal、temporal_visibility **分别备份并成功恢复到新的隔离校验库**；未覆盖业务库。
 
-**以上全部在用户 Mac 上 NOT RUN。** GitHub CI/静态模板验证只能说明代码配置一致，不代表实际部署、网络、Token 或 GHCR Pull 已通过。
+**2026-10-15 本地实测结果**：
+
+- PASS：Pod → 原 Compose PostgreSQL；三个业务库独立，原账号与应用数量保持不变。迁移先在 `marketplace_setup_verify` 隔离库通过，再将 `market` 从 8 条迁移升级至 9 条。
+- PASS：Temporal Chart 1.7.0 / Server 1.32.0 的 frontend、history、matching、内部 worker、Web UI 及业务 Worker 运行；门户健康接口和登录页返回 200，未登录读取需求/工作流返回 401。
+- PASS：真实 `deliveryWorkflow` 进入人工等待；Server 与 Activity Worker 重启后同一 run 继续等待，拒绝后结束；无 Copilot Token 的批准分支返回 `PROVIDER_REJECTED`，未产生外部任务。此项通过 SDK 验证，不能替代门户不同账号的业务验收。
+- PASS：Argo CD 3.5.5、Rollouts 1.10.1、Traefik 41.7.1、Prometheus Stack 92.7.0 部署（Grafana 启动时 256Mi 上限触发 OOM，已调至 512Mi）；门户 Pod 到 Argo 健康接口与 Prometheus 就绪接口返回 200。
+- PASS：Loki 18.15.1 / Alloy 1.13.1；从门户 Pod 成功查询已采集的 marketplace 日志。三个数据库分别备份并恢复到隔离库，备份放在用户主目录的受保护 `marketplace-backups` 中。
+- NOT RUN：门户真实账号登录与需求派发全链路、云端模型/Copilot、可信 GHCR → GitOps PR → 蓝绿切流/回滚、Mac 整机重启。用户选择本轮先验本地核心链路，不能将上述项目标为通过。
+
+本机门户入口为 `http://portal.k8s.orb.local`。Temporal UI 使用上文仅绑定 loopback 的端口转发。`kubectl top` 依赖 Metrics Server，本机尚未安装；可用 Prometheus 和 `docker stats --no-stream` 检查资源。GitHub CI/静态模板检查不代表真实发布或 Token 已验证。
 
 ## 9. 维护规则
 

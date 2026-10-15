@@ -1,4 +1,9 @@
 alloy:
+  resources:
+    requests:
+      memory: 64Mi
+    limits:
+      memory: 256Mi
   configMap:
     content: |-
       discovery.kubernetes "pods" {

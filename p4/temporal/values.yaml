@@ -3,6 +3,8 @@
 # IMPORTANT: test host.docker.internal:5432 from inside a Pod BEFORE applying this chart.
 # Copy data from the existing database first; never run postgres initdb / down -v.
 server:
+  # OrbStack gRPC clients must use the full service DNS name (short names time out).
+  publicClientHostPort: temporal-frontend.temporal.svc.cluster.local:7233
   replicaCount: 1
   image:
     repository: temporalio/server
@@ -51,7 +53,9 @@ server:
             maxConns: 5
             maxIdleConns: 2
     namespaces:
-      create: true
+      # The chart's namespace hook hardcodes a short frontend name. Bootstrap
+      # explicitly with the FQDN after Helm succeeds; see MAC_MINI_SETUP.md.
+      create: false
       namespace:
         - name: default
           retention: 7d
@@ -69,6 +73,7 @@ admintools:
   enabled: false
 web:
   enabled: true
+  temporalAddress: temporal-frontend.temporal.svc.cluster.local:7233
   replicaCount: 1
   service:
     type: ClusterIP
