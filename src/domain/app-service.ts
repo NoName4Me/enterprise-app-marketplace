@@ -1,9 +1,9 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { applications, appRevisions, reviewEvents, appFavorites, appFeedback, user } from "@/db/schema";
+import { applications, appRevisions, reviewEvents, appFavorites, appFeedback, appComponents, appEnvironments, componentEnvironments, externalReferences, user } from "@/db/schema";
 import { authorizeActor, type Actor } from "./actor";
 import { AppError } from "./app-errors";
-import { validateContent, type AppContent } from "./app-validation";
+import { validateContent, validateApplicationSource, type AppContent } from "./app-validation";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function uuidOr404(id: string): string {
@@ -33,13 +33,37 @@ function publicProjection() {
 /** Create a never-public application and its first editable draft. */
 export async function createApplication(actor: Actor | null, fields: Record<string, unknown>) {
   const owner = await authorizeActor(actor, "create");
-  const content = validateContent(fields);
+  const source = validateApplicationSource(fields);
+  const { sourceKind: _kind, sourceRepository: _repo, ...contentFields } = fields;
+  void _kind; void _repo;
+  const content = validateContent(contentFields);
+  if (source.sourceKind === "HOSTED" && content.targetUrl)
+    throw new AppError(422, "hosted_target_url_is_managed");
   return db.transaction(async (tx) => {
-    const [app] = await tx.insert(applications).values({ ownerUserId: owner.id }).returning();
+    const [app] = await tx.insert(applications).values({
+      ownerUserId: owner.id, sourceKind: source.sourceKind, sourceRepository: source.sourceRepository,
+    }).returning();
     const [revision] = await tx.insert(appRevisions).values({
       appId: app.id, sequence: 1, createdBy: owner.id, ...content,
     }).returning();
-    return { id: app.id, revisionId: revision.id, status: revision.status };
+    if (source.sourceKind === "HOSTED") {
+      // Internal assets are generated transactionally; no manual component/environment forms.
+      const [component] = await tx.insert(appComponents).values({
+        appId: app.id, key: "web", name: "Web 应用", notes: "平台管理",
+      }).returning({ id: appComponents.id });
+      const envs = await tx.insert(appEnvironments).values([
+        {appId: app.id, key: "test", name: "测试环境", purpose: "TEST", notes: "平台管理"},
+        {appId: app.id, key: "production", name: "生产环境", purpose: "PRODUCTION", notes: "平台管理"},
+      ]).returning({ id: appEnvironments.id });
+      await tx.insert(componentEnvironments).values(envs.map(env => ({
+        appId: app.id, componentId: component.id, environmentId: env.id,
+      })));
+      await tx.insert(externalReferences).values({
+        appId: app.id, componentId: component.id, resourceKind: "REPOSITORY",
+        provider: "GITHUB", repositoryFullName: source.sourceRepository!,
+      });
+    }
+    return { id: app.id, revisionId: revision.id, status: revision.status, sourceKind: source.sourceKind };
   });
 }
 
@@ -47,7 +71,7 @@ export async function listOwnedApplications(actor: Actor | null) {
   const owner = await authorizeActor(actor, "active");
   const apps = await db.select({
     id: applications.id, lifecycleStatus: applications.lifecycleStatus, listingStatus: applications.listingStatus,
-    publishedRevisionId: applications.publishedRevisionId,
+    publishedRevisionId: applications.publishedRevisionId, sourceKind: applications.sourceKind,
   }).from(applications).where(eq(applications.ownerUserId, owner.id))
     .orderBy(desc(applications.createdAt)).limit(50);
   if (apps.length === 0) return [];
@@ -77,6 +101,7 @@ export async function getOwnedApplication(actor: Actor | null, appId: string) {
   const revisions = await db.select().from(appRevisions)
     .where(eq(appRevisions.appId, app.id)).orderBy(desc(appRevisions.sequence));
   return { id: app.id, lifecycleStatus: app.lifecycleStatus, listingStatus: app.listingStatus,
+    sourceKind: app.sourceKind, sourceRepository: app.sourceRepository,
     publishedRevisionId: app.publishedRevisionId,
     revisions: revisions.map((r) => ({
       id: r.id, sequence: r.sequence, status: r.status, ...contentFromRevision(r),
@@ -147,6 +172,7 @@ export async function submitDraft(actor: Actor | null, appId: string) {
       .limit(1).for("update");
     if (!draft) throw new AppError(409, "no_editable_draft");
     validateContent({}, contentFromRevision(draft), true);
+    if (app.sourceKind === "HOSTED") throw new AppError(409, "hosted_production_not_deployed");
     const [submitted] = await tx.update(appRevisions).set({
       status: "PENDING", submittedAt: new Date(),
     }).where(and(eq(appRevisions.id, draft.id), eq(appRevisions.status, "DRAFT")))

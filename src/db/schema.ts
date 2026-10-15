@@ -76,6 +76,8 @@ import { sql } from "drizzle-orm";
 export const applications = pgTable("applications", {
   id: uuid("id").defaultRandom().primaryKey(),
   ownerUserId: text("owner_user_id").notNull().references(() => user.id),
+  sourceKind: text("source_kind", { enum: ["EXTERNAL", "HOSTED"] }).notNull().default("EXTERNAL"),
+  sourceRepository: text("source_repository"),
   listingStatus: text("listing_status", { enum: ["UNLISTED", "LISTED"] }).notNull().default("UNLISTED"),
   publishedRevisionId: uuid("published_revision_id"),
   featured: boolean("featured").notNull().default(false),
@@ -85,6 +87,8 @@ export const applications = pgTable("applications", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
+  check("application_source_kind_check", sql`${t.sourceKind} IN ('EXTERNAL','HOSTED')`),
+  check("application_hosted_repo_check", sql`${t.sourceKind} <> 'HOSTED' OR ${t.sourceRepository} IS NOT NULL`),
   check("application_listing_status_check", sql`${t.listingStatus} IN ('UNLISTED','LISTED')`),
   check("application_public_pointer_check", sql`${t.listingStatus} <> 'LISTED' OR ${t.publishedRevisionId} IS NOT NULL`),
   check("application_asset_version_positive", sql`${t.assetVersion} > 0`),
