@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { applications, appRevisions, reviewEvents, appFavorites, appFeedback, appComponents, appEnvironments, componentEnvironments, externalReferences, user } from "@/db/schema";
+import { applications, appRevisions, reviewEvents, appFavorites, appFeedback, appComponents, appEnvironments, componentEnvironments, externalReferences, appHostedPorts, user } from "@/db/schema";
 import { authorizeActor, type Actor } from "./actor";
 import { AppError } from "./app-errors";
 import { validateContent, validateApplicationSource, type AppContent } from "./app-validation";
@@ -62,6 +62,20 @@ export async function createApplication(actor: Actor | null, fields: Record<stri
         appId: app.id, componentId: component.id, resourceKind: "REPOSITORY",
         provider: "GITHUB", repositoryFullName: source.sourceRepository!,
       });
+      // Serialize allocations within the existing PostgreSQL instance.
+      // Kubernetes NodePort conflicts are still validated at actual deployment.
+      await tx.execute(sql`select pg_advisory_xact_lock(75190061)`);
+      const taken=await tx.select({port:appHostedPorts.nodePort}).from(appHostedPorts);
+      const occupied=new Set(taken.map(item=>item.port));
+      const free:number[]=[];
+      for(let port=31000;port<=31999&&free.length<2;port++) {
+        if(!occupied.has(port))free.push(port);
+      }
+      if(free.length!==2)throw new AppError(409,"hosted_nodeports_exhausted");
+      await tx.insert(appHostedPorts).values([
+        {appId:app.id,environment:"TEST",nodePort:free[0]},
+        {appId:app.id,environment:"PRODUCTION",nodePort:free[1]},
+      ]);
     }
     return { id: app.id, revisionId: revision.id, status: revision.status, sourceKind: source.sourceKind };
   });
@@ -100,7 +114,22 @@ export async function getOwnedApplication(actor: Actor | null, appId: string) {
   if (!app) throw new AppError(404, "not_found");
   const revisions = await db.select().from(appRevisions)
     .where(eq(appRevisions.appId, app.id)).orderBy(desc(appRevisions.sequence));
-  return { id: app.id, lifecycleStatus: app.lifecycleStatus, listingStatus: app.listingStatus,
+  const reserved=app.sourceKind==="HOSTED"
+    ? await db.select({
+      environment:appHostedPorts.environment,port:appHostedPorts.nodePort,
+      state:appHostedPorts.state,imageDigest:appHostedPorts.imageDigest,
+      verifiedAt:appHostedPorts.verifiedAt,
+    }).from(appHostedPorts).where(eq(appHostedPorts.appId,app.id)) : [];
+  const ip=process.env.HOSTED_PUBLIC_IP?.trim()??"";
+  const validIPv4=ip.split(".").length===4&&ip.split(".").every(segment=>
+    /^[0-9]{1,3}$/.test(segment)&&Number(segment)<=255
+  );
+  const hostedEndpoints=reserved.map(endpoint=>({
+    ...endpoint,
+    url:endpoint.state==="READY"&&endpoint.verifiedAt&&validIPv4
+      ? "http://"+ip+":"+endpoint.port : null,
+  }));
+  return { hostedEndpoints, id: app.id, lifecycleStatus: app.lifecycleStatus, listingStatus: app.listingStatus,
     sourceKind: app.sourceKind, sourceRepository: app.sourceRepository,
     publishedRevisionId: app.publishedRevisionId,
     revisions: revisions.map((r) => ({
