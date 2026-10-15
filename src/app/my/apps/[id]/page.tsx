@@ -14,6 +14,7 @@ import { DevopsEvidencePanel } from "@/app/components/devops-evidence-panel";
 import { ApplicationForm } from "../application-form";
 import { RevisionAction } from "../revision-action";
 import { DeleteDraftButton } from "../delete-draft-button";
+import { HostedReleasePanel } from "@/app/components/hosted-release-panel";
 export const dynamic="force-dynamic";
 type View="overview"|"releases"|"operations"|"requirements"|"settings"|"advanced";
 const tabs:{view:View;label:string}[]=[
@@ -86,9 +87,13 @@ export default async function ManagedApplication({params,searchParams}:{
           {testEndpoint?.url?<a href={testEndpoint.url} target="_blank" rel="noopener noreferrer">访问测试环境 →</a>:<span className="tag">待验证镜像与访问</span>}</article>
         <article><h4>生产环境</h4><p className="muted">预留端口：{productionEndpoint?.port??"未分配"} · {productionEndpoint?.state??"未预留"}</p>
           {productionEndpoint?.url?<a href={productionEndpoint.url} target="_blank" rel="noopener noreferrer">访问生产环境 →</a>:<span className="tag">尚未发布</span>}</article></div>
-        <p className="notice">当前仓库只具备 marketplace-lab 的实验发布适配器，尚不能安全部署任意新仓库；因此不提供会误导用户的「一键发布」按钮。通用发布器接通后，这里将直接选择版本并触发 Temporal 流程。</p>
+        <p className="notice">发布由 Temporal 发起构建、生成 GitOps PR，并在审核合并后交由 Argo CD 同步。未配置构建模板、集群入口或权限时将明确显示失败原因；仅实际验证通过后标记可用。</p>
       </>}
     </section>
+    {hosted&&repo&&<HostedReleasePanel root={root} repo={repo}
+      testReady={testEndpoint?.state==="READY"}
+      testDigest={testEndpoint?.imageDigest??null}
+      productionDigest={productionEndpoint?.imageDigest??null}/>}
     {hosted&&<ArgoCDLivePanel root={root} registered={2}/>}
   </div>}
   {view==="operations"&&<div className="stack">
