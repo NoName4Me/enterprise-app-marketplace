@@ -1,104 +1,126 @@
 "use client";
-
 import { useState } from "react";
 import type { DevopsEvidence } from "@/domain/devops-evidence";
 import type { Diagnosis } from "@/domain/devops-diagnosis";
 
-function when(value: string | null): string { return value ? new Date(value).toLocaleString("zh-CN") : "未提供"; }
-const metricLabels: Record<string, string> = {
-  active_release: "active Service 实际采样的代码版本",
-  active_lab_health: "当前 active 流量后端健康指标（1=健康，0=故障）",
-  namespace_ready_pods: "就绪 Pod 数（专用实验命名空间）",
-  namespace_container_restarts: "容器累计重启次数（专用实验命名空间）",
-};
-export function DevopsEvidencePanel({ root }: { root: string }) {
-  const [data, setData] = useState<DevopsEvidence | null>(null);
-  const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
-  const [busy, setBusy] = useState<"evidence" | "diagnose" | null>(null);
-  const [error, setError] = useState("");
-  async function load(action: "evidence" | "diagnose") {
-    if (busy) return;
-    setBusy(action);
-    setError("");
-    try {
-      const response = await fetch(root + "/devops/" + (action === "evidence" ? "evidence" : "diagnose"), {
-        method: action === "evidence" ? "GET" : "POST",
-        cache: "no-store",
-      });
-      if (!response.ok) {
-        setError([401, 403, 404].includes(response.status) ? "当前账号无权读取本应用的运维资料。" : "读取外部系统失败。");
-        return;
-      }
-      const payload = await response.json() as DevopsEvidence | { evidence: DevopsEvidence; diagnosis: Diagnosis };
-      if ("evidence" in payload) {
-        setData(payload.evidence);
-        setDiagnosis(payload.diagnosis);
-      } else {
-        setData(payload);
-        setDiagnosis(null);
-      }
-    } catch {
-      setError("访问运维服务失败。");
-    } finally {
-      setBusy(null);
-    }
-  }
-  return <section id="devops" className="card asset-group" aria-label="AI DevOps 运行分析">
-    <h3>AI DevOps · 运行证据与诊断</h3>
-    <p className="muted">只读汇总该应用的 Argo CD、GitHub、Prometheus 和 Loki。AI 分析使用显式配置的云端大模型 API，不执行代码修改或发布。</p>
-    <div className="actions">
-      <button className="button-secondary" type="button" disabled={!!busy} onClick={() => void load("evidence")}>
-        {busy === "evidence" ? "读取中…" : "读取运维证据"}
-      </button>
-      <button type="button" disabled={!!busy} onClick={() => void load("diagnose")}>
-        {busy === "diagnose" ? "诊断中…" : "AI 只读诊断"}
-      </button>
+function date(value:string|null|undefined){return value?new Date(value).toLocaleString("zh-CN"):"未知时间";}
+function signal(state:"OK"|"NOT_CONNECTED"|"UNKNOWN"){
+ return state==="OK"?"已连接":state==="NOT_CONNECTED"?"未接入":"暂不可读";
+}
+function incident(e:DevopsEvidence){
+ const argo=e.argo.applications;
+ if(argo.some(a=>a.health==="Degraded"||a.health==="Missing"))return {text:"发现部署异常",tone:"problem"};
+ if(e.alerts.state==="OK"&&e.alerts.items.length>0)return {text:"有活动告警",tone:"problem"};
+ if(!argo.length||e.argo.state!=="OK"||e.metrics.state!=="OK"||e.alerts.state!=="OK")
+  return {text:"健康状况尚不完整",tone:"unknown"};
+ return {text:"未发现已接入信号中的异常",tone:"ok"};
+}
+export function DevopsEvidencePanel({root}:{root:string}){
+ const [data,setData]=useState<DevopsEvidence|null>(null),[diagnosis,setDiagnosis]=useState<Diagnosis|null>(null);
+ const [busy,setBusy]=useState<"evidence"|"diagnose"|null>(null),[error,setError]=useState("");
+ async function load(type:"evidence"|"diagnose"){
+  if(busy)return;
+  setBusy(type);setError("");
+  try{
+   const r=await fetch(root+"/devops/"+(type==="evidence"?"evidence":"diagnose"),{
+    method:type==="evidence"?"GET":"POST",cache:"no-store",
+   });
+   if(!r.ok){setError([401,403,404].includes(r.status)?"无权读取此应用的私有运行资料。":"运行证据暂不可获取。");return;}
+   const value=await r.json() as DevopsEvidence|{evidence:DevopsEvidence;diagnosis:Diagnosis};
+   if("evidence" in value){setData(value.evidence);setDiagnosis(value.diagnosis);}
+   else{setData(value);setDiagnosis(null);}
+  }catch{setError("无法访问运行服务，请检查网络连接。");}
+  finally{setBusy(null);}
+ }
+ const overview=data?incident(data):null;
+ const first=data?.argo.applications[0];
+ const ready=data?.metrics.items.find(x=>x.name==="namespace_ready_pods");
+ const restart=data?.metrics.items.find(x=>x.name==="namespace_container_restarts");
+ const ci=data?.github.references.flatMap(x=>x.runs.items)[0];
+ const timeline=data?[...data.alerts.items.map(a=>({key:"alert-"+a.name,time:a.activeAt,title:"告警："+a.name,
+     text:a.summary||a.state})),
+   ...data.argo.applications.filter(a=>a.lastSyncedAt).map(a=>({key:"sync-"+a.name,time:a.lastSyncedAt,
+    title:"GitOps 同步："+a.name,text:"revision "+(a.lastSyncedRevision??"未知")}))]
+   .sort((a,b)=>(b.time??"").localeCompare(a.time??"")).slice(0,7):[];
+ return <div className="ops-workspace">
+  <section className="ops-topline">
+   <div><p className="eyebrow">运行中心 / 应用状态</p><h2>健康与事件</h2>
+    <p className="muted">结合部署、告警、指标和最近变更查看应用状态。所有事实来自有权限的外部系统。</p></div>
+   <div className="actions">
+    <button type="button" className="button-secondary" disabled={!!busy} onClick={()=>void load("evidence")}>
+     {busy==="evidence"?"读取中…":"刷新运行数据"}</button>
+    <button type="button" disabled={!!busy} onClick={()=>void load("diagnose")}>
+     {busy==="diagnose"?"分析中…":"AI 分析当前状态"}</button>
+   </div>
+  </section>
+  {error&&<p role="alert" className="error">{error}</p>}
+  {!data?<section className="card ops-empty">
+   <h3>先读取真实运行状态</h3>
+   <p>平台将尝试访问该应用对应的 Argo CD、Prometheus、Loki 和 GitHub。尚未接入时不会显示虚假的健康状态。</p>
+   <button onClick={()=>void load("evidence")} disabled={!!busy} type="button">读取应用状态</button>
+  </section>:<>
+   <section className="ops-health-banner">
+    <div><p className="eyebrow">综合信号 · {date(data.collectedAt)}</p>
+     <h3 className={"ops-health "+overview?.tone}>{overview?.text}</h3>
+     <p className="muted">综合结果只覆盖已接入的数据源，不等于端到端用户访问验证。</p></div>
+    <span className="tag">Argo：{data.argo.state==="OK"?"已连接":signal(data.argo.state)}</span>
+   </section>
+   <div className="ops-signal-grid">
+    <div className="card ops-signal"><span>部署状态</span><strong>{first?(first.health==="Healthy"?"资源健康":first.health):"未知"}</strong>
+      <small>Argo CD · {data.argo.applications.length} 个关联应用</small></div>
+    <div className="card ops-signal"><span>活动告警</span><strong>{data.alerts.state==="OK"?data.alerts.items.length:"—"}</strong>
+      <small>Prometheus · {signal(data.alerts.state)}</small></div>
+    <div className="card ops-signal"><span>就绪容器 / Pod</span><strong>{ready?.value??"—"}</strong>
+      <small>Prometheus · {signal(data.metrics.state)}</small></div>
+    <div className="card ops-signal"><span>最近 CI</span><strong>{ci?.conclusion??ci?.status??"—"}</strong>
+      <small>GitHub · 与部署成功分开判断</small></div>
+   </div>
+   <div className="ops-main-grid">
+    <div className="stack">
+     <section className="card">
+       <div className="section-title"><h3>正在发生的事情</h3><span className="tag">{data.alerts.items.length} 条告警</span></div>
+       {data.alerts.state!=="OK"&&<p className="muted">告警来源：{signal(data.alerts.state)}。不能判断为无告警。</p>}
+       {data.alerts.state==="OK"&&!data.alerts.items.length&&<p className="muted">已接入范围内暂无活跃告警。</p>}
+       {data.alerts.items.map((a,i)=><article className="ops-incident" key={a.name+"-"+i}>
+         <span className="ops-incident-dot" aria-hidden="true"/><div><strong>{a.name}</strong>
+          <p>{a.summary||a.severity+" · "+a.state}</p><small>{date(a.activeAt)}</small></div>
+       </article>)}
+     </section>
+     <section className="card">
+      <h3>近期运行事件</h3>
+      {!timeline.length&&<p className="muted">没有可确定时间的运行事件；接入部署或告警源后将显示时间线。</p>}
+      <div className="ops-timeline">{timeline.map(item=><article key={item.key}>
+       <time>{date(item.time)}</time><strong>{item.title}</strong><p>{item.text}</p>
+      </article>)}</div>
+     </section>
+     <section className="card">
+      <div className="section-title"><h3>部署与运行证据</h3><span className="tag">{signal(data.metrics.state)}</span></div>
+      <p className="muted">{data.scopeNote}</p>
+      {data.argo.applications.map(a=><div className="ops-proof" key={a.name}>
+       <strong>{a.name} · {a.environmentName}</strong>
+       <p>资源健康：{a.health} · GitOps 同步：{a.sync} · 镜像：{a.images.join(", ")||"尚未读取"}</p>
+      </div>)}
+      {restart&&<p className="muted">容器累计重启：{restart.value} · 采样时间：{date(restart.sampledAt)}</p>}
+      <details><summary>查看日志样本与原始信号</summary>
+       <p>日志来源：{signal(data.logs.state)} · 最近有限样本，不代表完整日志。</p>
+       {!data.logs.items.length&&<p className="muted">暂无可读日志。</p>}
+       {data.logs.items.slice(0,12).map((l,i)=><p key={i} className="ops-logline">{date(l.at)} · {l.line}</p>)}
+       <p>代码来源：GitHub；{data.github.references.length} 个可关联引用。</p>
+      </details>
+     </section>
     </div>
-    {error && <p className="error" role="alert">{error}</p>}
-    {data && <div className="stack">
-      <p className="muted">证据获取：{when(data.collectedAt)} · {data.scopeNote}</p>
-      <div className="asset-row">
-        <strong>运行状态 · Argo CD（{data.argo.state}）</strong>
-        {!data.argo.applications.length && <p className="muted">没有可归属的运行状态；不得把未知当作健康。</p>}
-        {data.argo.applications.map(app => <p key={app.project + "/" + app.name}>
-          {app.name} / {app.environmentName}：{app.sync} · {app.health} · 最近同步版本 {app.lastSyncedRevision || "未知"}
-        </p>)}
-      </div>
-      <div className="asset-row">
-        <strong>运行指标 · {data.metrics.source}（{data.metrics.state}）</strong>
-        {!data.metrics.items.length && <p className="muted">无可用指标；不推断应用健康。</p>}
-        {data.metrics.items.map(item => <p key={item.name} className="muted">
-          {metricLabels[item.name] ?? item.name}：{item.revision ?? item.value} · 采样 {when(item.sampledAt)}
-        </p>)}
-      </div>
-      <div className="asset-row">
-        <strong>告警 · {data.alerts.source}（{data.alerts.state}）</strong>
-        {data.alerts.state === "OK" && !data.alerts.items.length && <p className="muted">该专用实验命名空间目前无活跃 Prometheus 告警。</p>}
-        {data.alerts.state !== "OK" && <p className="muted">无法读取告警；不能据此确认无故障。</p>}
-        {data.alerts.items.map((alert, index) => <p key={index} className="muted">
-          {alert.name} · {alert.severity} · {alert.state} · {alert.summary || "无摘要"} · {when(alert.activeAt)}
-        </p>)}
-      </div>
-      <div className="asset-row">
-        <strong>最近日志 · {data.logs.source}（{data.logs.state}）</strong>
-        {!data.logs.items.length && <p className="muted">未取得实验应用日志。</p>}
-        {data.logs.items.slice(0, 10).map((entry, index) => <p key={index} className="muted pre-wrap">
-          {when(entry.at)} · {entry.line}
-        </p>)}
-      </div>
-      <div className="asset-row">
-        <strong>近期代码及 CI · GitHub</strong>
-        {data.github.references.length
-          ? data.github.references.map(ref => <p className="muted" key={ref.id}>
-              {ref.repository}：提交 {ref.commits.state} / CI {ref.runs.state}，CI 最近结论 {ref.runs.items[0]?.conclusion ?? "未知"}
-            </p>)
-          : <p className="muted">尚无已登记且可读取的 GitHub 引用。</p>}
-      </div>
-    </div>}
-    {diagnosis && <div className="asset-row" aria-live="polite">
-      <strong>AI 分析 · {diagnosis.state} · {diagnosis.model ?? "未配置"}</strong>
-      <p className="pre-wrap">{diagnosis.text}</p>
-      <p className="muted">{diagnosis.note} · {when(diagnosis.generatedAt)}</p>
-    </div>}
-  </section>;
+    <aside className="card ops-ai-panel">
+      <p className="eyebrow">AI · 诊断助手</p><h3>根据实际证据分析问题</h3>
+      <p className="muted">把部署变化、活动告警和近期 CI 组合起来，区分观察事实、可能原因与下一步验证。</p>
+      <button disabled={!!busy} onClick={()=>void load("diagnose")} type="button">
+       {busy==="diagnose"?"正在分析…":"开始 AI 诊断"}</button>
+      {diagnosis?<div className="ops-ai-result" aria-live="polite">
+       <p className="muted">结果：{diagnosis.state} · 模型：{diagnosis.model??"未连接"} · {date(diagnosis.generatedAt)}</p>
+       <div className="pre-wrap">{diagnosis.text}</div>
+       <p className="muted">{diagnosis.note}</p>
+      </div>:<p className="muted">尚未生成诊断。AI 不会在未经审批的情况下修改代码、重启或发布应用。</p>}
+    </aside>
+   </div>
+  </>}
+ </div>;
 }
