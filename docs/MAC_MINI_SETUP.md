@@ -283,3 +283,21 @@ Mac mini 核心环境已经部署完成，本轮**不要重跑完整安装步骤
 5. `node --test scripts/p4-hosted-manifest.test.mjs` 可在 Mac 非破坏性运行。通用部署尚未完成之前，不要把渲染出的 YAML 直接当生产发布操作执行；真实验证步骤详见 `docs/HOSTED_RELEASE.md`。
 
 当前最需要本地 Agent 返回的事实：`kubectl get nodes`、`kubectl get svc -A`（移除任何私密信息后）、固定 IP:NodePort 从 LAN 的连通性、与 GitHub GHCR 对应源仓库的权限限制。这些只影响后续真实部署联调，不阻碍继续编写代码。
+
+## 退役六条内置假应用 + 删除初始草稿（增量维护）
+
+**不重装服务、不清理任何 Docker/PG 卷。** `demo:seed` 已取消，原 `seed-demo.ts` 不再执行。为避免误碰真实数据，只允许按原种子发布者 `demo-publisher@example.test`、六个精确名称、对应 `https://example.com/...` URL 和专门的示例说明匹配记录；**有需求、使用申请、资产绑定或托管资源的记录自动跳过**。模拟评论/星级/收藏随这些演示应用的数据库级联关系被清理；测试账号本身不删除。
+
+在已完成 `0009`、`0010` 增量迁移的 Mac mini 本地工作树中（只针对 `market` 库）：
+
+```sh
+# 确认 DATABASE_URL 连接的是 market，而非 temporal
+# 清理前先用已有的 PG 备份流程保存 market
+pnpm demo:cleanup           # 预览命中对象；不修改数据库
+pnpm demo:cleanup --apply   # 仅清理预览过的 6 个老式演示应用
+pnpm demo:cleanup           # 结果应显示 0 个匹配
+```
+
+上面的命令**未由本次远程代码修改在你的 Mac 执行**。如预览显示不属于内置演示的应用，**停止，不执行 --apply**。这与删除任意用户草稿是两种操作，切勿通过编辑 SQL 解除限制。
+
+应用负责人可在「我管理的应用 → 应用详情 → 设置 → 删除此草稿」删除**唯一初始 DRAFT、从未送审、无需求/访问/运行记录**的应用。托管草稿还会释放仅处于 RESERVED 状态的 TEST/PRODUCTION 端口；一旦提交市场审核或实际部署，后端拒绝直接删除。不同账号无法删除不属于自己的草稿。

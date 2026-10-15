@@ -21,7 +21,7 @@ export function DeleteDraftButton({appId,appName}:{appId:string;appName:string})
     }catch(e){setError(e instanceof Error?e.message:"删除失败。");}
     finally{setBusy(false);}
   }
-  return <section className="card draft-delete-section">
+  return <section id="draft-delete" className="card draft-delete-section">
     <h3>删除应用草稿</h3>
     <p className="muted">只允许删除从未提交审核且没有使用记录的草稿。系统会同步释放自动生成的环境和端口预约。</p>
     <button className="danger-button" disabled={busy} onClick={()=>void remove()} type="button">

@@ -24,3 +24,8 @@ pnpm dev
 已有 OrbStack/PostgreSQL 数据不得清除；仅在检查 DATABASE_URL 后迁移或引导管理员。http://localhost:3000/login 。普通功能优先真实主流程，不强制新增自动化测试；PR 轻量 CI，master 全量回归。GHCR 实验发布改为手动、以受信 master 完整 CI 为前提。
 
 公开仓库尚无开源许可证；不提交员工数据、内部敏感资料和密钥。
+## 真实托管部署测试仓库
+
+推荐在 GitHub 新建独立的小型 Web 应用仓库（例如 `marketplace-e2e-web`），**不要直接用门户主仓库作为普通托管用户应用**。最小规范包括 Dockerfile、多架构 `linux/arm64` 镜像支持、`/health`、`/version`、锁定依赖、单元测试、GitHub Actions 完整 CI，主分支可信构建 GHCR 的不可变 SHA256 Digest，以及能人为触发验证失败的回归测试。不要把 Mac/Argo/Temporal 的机密加入该应用仓库。生产只能晋级已测试的**同一 Digest**，具体见 `docs/HOSTED_RELEASE.md`。
+
+已退役假应用 Seed；Mac 上清理历史示例数据请参考 `docs/MAC_MINI_SETUP.md` 的增量维护节。
