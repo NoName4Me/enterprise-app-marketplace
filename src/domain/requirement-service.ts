@@ -22,8 +22,9 @@ function githubUrl(value: unknown, kind: "issues" | "pull") {
     return url.href;
   } catch { throw new AppError(422, "invalid_link"); }
 }
-function readable(row: { appId: string | null; createdBy: string; appListed: string | null }, actorId: string, role: string | null) {
-  return row.appId === null || row.appListed === "LISTED" || row.createdBy === actorId || role?.split(",").includes("admin");
+function readable(row: { appId: string | null; createdBy: string; appListed: string | null; ownerId: string | null }, actorId: string, role: string | null) {
+  return row.appId === null || row.appListed === "LISTED" ||
+    row.createdBy === actorId || row.ownerId === actorId || role?.split(",").includes("admin");
 }
 async function rowOf(requirementId: string) {
   const [row] = await db.select({
@@ -51,7 +52,7 @@ export async function listRequirements(actor: Actor | null) {
   }).from(requirements).leftJoin(applications, eq(requirements.appId, applications.id))
     .leftJoin(appRevisions, eq(applications.publishedRevisionId, appRevisions.id))
     .where(or(isNull(requirements.appId), eq(applications.listingStatus, "LISTED"),
-      eq(requirements.createdBy, current.id)))
+      eq(requirements.createdBy, current.id),eq(applications.ownerUserId,current.id)))
     .orderBy(desc(requirements.createdAt)).limit(100);
   return rows.map(({ appListed, ...row }) => ({ ...row,
     appName: appListed === "LISTED" || row.createdBy === current.id ? row.appName : null }));
@@ -68,9 +69,14 @@ export async function createRequirement(actor: Actor | null, body: Record<string
   const appId = body.appId === null || body.appId === "" || body.appId === undefined ? null : id(String(body.appId));
   if (type === "NEW_APP" && appId || type !== "NEW_APP" && !appId) throw new AppError(422, "invalid_application_relation");
   if (appId) {
-    const [app] = await db.select({ listed: applications.listingStatus, revision: applications.publishedRevisionId })
-      .from(applications).where(eq(applications.id, appId)).limit(1);
-    if (!app || app.listed !== "LISTED" || !app.revision) throw new AppError(404, "not_found");
+    const [app] = await db.select({
+      listed: applications.listingStatus, revision: applications.publishedRevisionId,
+      ownerId: applications.ownerUserId,
+    }).from(applications).where(eq(applications.id, appId)).limit(1);
+    // Users can suggest changes only for listed apps; the private app owner may
+    // also file an incident/BUG before the app is approved for the market.
+    if (!app || (app.ownerId !== current.id && (app.listed !== "LISTED" || !app.revision)))
+      throw new AppError(404, "not_found");
   }
   const [created] = await db.insert(requirements).values({ createdBy: current.id, appId, type, title, description })
     .returning({ id: requirements.id });
