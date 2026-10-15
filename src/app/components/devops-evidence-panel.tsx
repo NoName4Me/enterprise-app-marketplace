@@ -3,6 +3,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DevopsEvidence } from "@/domain/devops-evidence";
 import type { Diagnosis } from "@/domain/devops-diagnosis";
+import type {ReadyPodHistory} from "@/domain/ops-series";
+import {OpsHistoryChart} from "./ops-history-chart";
 
 function date(value:string|null|undefined){return value?new Date(value).toLocaleString("zh-CN"):"未知时间";}
 function signal(state:"OK"|"NOT_CONNECTED"|"UNKNOWN"){
@@ -24,6 +26,7 @@ export function DevopsEvidencePanel({root,appId}:{root:string;appId?:string}){
  const [fixPending,setFixPending]=useState(false);
  const [data,setData]=useState<DevopsEvidence|null>(null),[diagnosis,setDiagnosis]=useState<Diagnosis|null>(null);
  const [busy,setBusy]=useState<"evidence"|"diagnose"|null>(null),[error,setError]=useState("");
+ const [history,setHistory]=useState<ReadyPodHistory|null>(null);
  async function load(type:"evidence"|"diagnose"){
   if(busy)return;
   setBusy(type);setError("");
@@ -35,6 +38,12 @@ export function DevopsEvidencePanel({root,appId}:{root:string;appId?:string}){
    const value=await r.json() as DevopsEvidence|{evidence:DevopsEvidence;diagnosis:Diagnosis};
    if("evidence" in value){setData(value.evidence);setDiagnosis(value.diagnosis);}
    else{setData(value);setDiagnosis(null);}
+   if(appId){
+     try {
+       const trend=await fetch(root+"/devops/timeseries",{cache:"no-store"});
+       setHistory(trend.ok?await trend.json() as ReadyPodHistory:null);
+     }catch{setHistory(null);}
+   }
   }catch{setError("无法访问运行服务，请检查网络连接。");}
   finally{setBusy(null);}
  }
@@ -95,6 +104,7 @@ export function DevopsEvidencePanel({root,appId}:{root:string;appId?:string}){
     <div className="card ops-signal"><span>最近 CI</span><strong>{ci?.conclusion??ci?.status??"—"}</strong>
       <small>GitHub · 与部署成功分开判断</small></div>
    </div>
+   {history&&<OpsHistoryChart history={history}/>}
    <div className="ops-main-grid">
     <div className="stack">
      <section className="card">
