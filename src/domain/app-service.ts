@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { applications, appRevisions, reviewEvents, appFavorites, appFeedback, appComponents, appEnvironments, componentEnvironments, externalReferences, appHostedPorts, user } from "@/db/schema";
+import { applications, appRevisions, reviewEvents, appFavorites, appFeedback, appComponents, appEnvironments, componentEnvironments, externalReferences, appHostedPorts, assetEvents, user } from "@/db/schema";
 import { authorizeActor, type Actor } from "./actor";
 import { AppError } from "./app-errors";
 import { validateContent, validateApplicationSource, type AppContent } from "./app-validation";
@@ -76,6 +76,11 @@ export async function createApplication(actor: Actor | null, fields: Record<stri
         {appId:app.id,environment:"TEST",nodePort:free[0]},
         {appId:app.id,environment:"PRODUCTION",nodePort:free[1]},
       ]);
+      await tx.insert(assetEvents).values({
+        appId:app.id,actorUserId:owner.id,action:"CREATED",
+        resourceType:"application",resourceId:app.id,assetVersionAfter:app.assetVersion,
+        reason:"系统依据 GitHub 托管来源建立组件、测试/生产环境与端口预约",
+      });
     }
     return { id: app.id, revisionId: revision.id, status: revision.status, sourceKind: source.sourceKind };
   });
@@ -200,8 +205,8 @@ export async function submitDraft(actor: Actor | null, appId: string) {
       .where(and(eq(appRevisions.appId, appId), eq(appRevisions.status, "DRAFT")))
       .limit(1).for("update");
     if (!draft) throw new AppError(409, "no_editable_draft");
-    validateContent({}, contentFromRevision(draft), true);
     if (app.sourceKind === "HOSTED") throw new AppError(409, "hosted_production_not_deployed");
+    validateContent({}, contentFromRevision(draft), true);
     const [submitted] = await tx.update(appRevisions).set({
       status: "PENDING", submittedAt: new Date(),
     }).where(and(eq(appRevisions.id, draft.id), eq(appRevisions.status, "DRAFT")))
