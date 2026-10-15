@@ -33,6 +33,7 @@ export function HostedReleasePanel({root,repo,testReady,testDigest,productionDig
   const router=useRouter();
   const [rows,setRows]=useState<Release[]>([]);
   const [busy,setBusy]=useState(false);
+  const [selectedTestId,setSelectedTestId]=useState("");
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const refresh=useCallback(async()=>{
@@ -52,6 +53,8 @@ export function HostedReleasePanel({root,repo,testReady,testDigest,productionDig
   },[refresh]);
   const activeTest=rows.some(r=>r.environment==="TEST"&&active(r.status));
   const activeProd=rows.some(r=>r.environment==="PRODUCTION"&&active(r.status));
+  const tested=rows.filter(r=>r.environment==="TEST"&&r.status==="READY"&&!!r.imageDigest);
+  const candidate=tested.find(r=>r.id===selectedTestId)??tested[0];
   async function trigger(environment:"TEST"|"PRODUCTION"){
     if(busy)return;
     if(environment==="PRODUCTION"&&!confirm("确认将测试环境验证的完全相同镜像提交生产发布审批？正式流量变更需要 GitOps PR 人工审核。"))return;
@@ -59,7 +62,7 @@ export function HostedReleasePanel({root,repo,testReady,testDigest,productionDig
     try{
       const response=await fetch(root+"/hosted/releases",{
         method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({environment})
+        body:JSON.stringify(environment==="PRODUCTION"?{environment,testedReleaseId:candidate?.id}:{environment})
       });
       if(!response.ok){
         const value=await response.json() as {error?:string};
@@ -83,11 +86,18 @@ export function HostedReleasePanel({root,repo,testReady,testDigest,productionDig
       </div>
       <div className="release-action">
         <strong>2. 将已验证版本发布生产</strong>
-        <p>{testReady&&testDigest?
-          "当前可晋级测试镜像："+testDigest.slice(-16):
-          "测试环境尚未通过真实部署验证。"}</p>
-        <button type="button" disabled={busy||activeProd||!testReady||
-          !testDigest||testDigest===productionDigest}
+        <p>{candidate?.imageDigest?
+          "选择已验证的测试镜像；可以选择历史版本进行安全回退。":
+          "测试环境尚未完成可信部署验证。"}</p>
+        {tested.length>0&&<label>选择已验证版本
+          <select value={candidate?.id??""} onChange={e=>setSelectedTestId(e.target.value)}>
+            {tested.map(r=><option key={r.id} value={r.id}>
+              {r.imageDigest?.slice(-16)} · {new Date(r.createdAt).toLocaleString("zh-CN")}
+            </option>)}
+          </select>
+        </label>}
+        <button type="button" disabled={busy||activeProd||!candidate?.imageDigest||
+          candidate.imageDigest===productionDigest}
           onClick={()=>void trigger("PRODUCTION")}>
           {activeProd?"生产发布进行中":"发布到生产"}
         </button>
