@@ -57,7 +57,7 @@ export async function hostedReleaseWorkflow(input:HostedReleaseInput):Promise<Ho
     let merged=false;
     for(let i=0;i<1008;i++){
       await sleep("10 minutes");
-      const prResult=await checkGitopsPr(input.releaseId,pr.prNumber);
+      const prResult=await checkGitopsPr(input,pr.prNumber,state.imageDigest!);
       if(prResult==="CLOSED"){await move("FAILED","GitOps PR 已关闭但未合并");return state;}
       if(prResult==="MERGED"){merged=true;break;}
     }
