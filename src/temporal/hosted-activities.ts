@@ -46,12 +46,16 @@ export async function recordHostedRelease(snapshot:HostedReleaseSnapshot):Promis
     if(status==="READY"){
       if(!snapshot.imageDigest||!DIGEST.test(snapshot.imageDigest))throw new Error("digest_not_trusted");
       if(release.environment==="PRODUCTION"){
-        const [tested]=await tx.select({image:appHostedPorts.imageDigest,state:appHostedPorts.state})
-          .from(appHostedPorts).where(and(
-            eq(appHostedPorts.appId,release.appId),eq(appHostedPorts.environment,"TEST")
-          )).for("update");
-        if(!tested||tested.state!=="READY"||tested.image!==snapshot.imageDigest)
-          throw new Error("test_digest_changed");
+        // Production can promote or roll back to any historically VERIFIED TEST digest.
+        // A malicious actor cannot inject an arbitrary tag through the client.
+        const [tested]=await tx.select({id:hostedReleases.id})
+          .from(hostedReleases).where(and(
+            eq(hostedReleases.appId,release.appId),
+            eq(hostedReleases.environment,"TEST"),
+            eq(hostedReleases.status,"READY"),
+            eq(hostedReleases.imageDigest,snapshot.imageDigest)
+          )).limit(1);
+        if(!tested)throw new Error("no_verified_test_digest");
       }
       await tx.update(appHostedPorts).set({
         state:"READY",imageDigest:snapshot.imageDigest,verifiedAt:new Date(),updatedAt:new Date()

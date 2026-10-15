@@ -38,7 +38,7 @@ export async function listHostedReleases(actor:Actor|null,appId:string){
     note:r.note,createdAt:r.createdAt,updatedAt:r.updatedAt
   }))};
 }
-export async function startHostedRelease(actor:Actor|null,appId:string,environment:unknown){
+export async function startHostedRelease(actor:Actor|null,appId:string,environment:unknown,testedReleaseId:unknown=null){
   const user=await authorizeActor(actor,"create");
   validateId(appId);
   if(environment!=="TEST"&&environment!=="PRODUCTION")
@@ -66,12 +66,21 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
     if(!port||!env)throw new AppError(409,"hosted_environment_missing");
     let imageDigest:string|undefined;
     if(environment==="PRODUCTION"){
-      const [test]=await tx.select().from(appHostedPorts).where(and(
-        eq(appHostedPorts.appId,appId),eq(appHostedPorts.environment,"TEST"))).for("share");
-      if(!test||test.state!=="READY"||!test.verifiedAt||
-         !test.imageDigest||!DIGEST.test(test.imageDigest))
+      // A selected historical TEST release also supports safe rollback.
+      // Never accept a client-supplied digest or branch name.
+      if(testedReleaseId!==null&&
+        (typeof testedReleaseId!=="string"||!UUID.test(testedReleaseId)))
+        throw new AppError(422,"invalid_tested_release");
+      const ready=await tx.select({
+        id:hostedReleases.id,digest:hostedReleases.imageDigest,
+      }).from(hostedReleases).where(and(
+        eq(hostedReleases.appId,appId),
+        eq(hostedReleases.environment,"TEST"),eq(hostedReleases.status,"READY")
+      )).orderBy(desc(hostedReleases.createdAt)).limit(30);
+      const chosen=testedReleaseId===null?ready[0]:ready.find(x=>x.id===testedReleaseId);
+      if(!chosen||!chosen.digest||!DIGEST.test(chosen.digest))
         throw new AppError(409,"test_release_not_verified");
-      imageDigest=test.imageDigest;
+      imageDigest=chosen.digest;
       if(port.state==="READY"&&port.imageDigest===imageDigest)
         throw new AppError(409,"production_already_on_tested_version");
     }
