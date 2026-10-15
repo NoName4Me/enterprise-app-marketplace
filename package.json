@@ -19,7 +19,8 @@
     "test:e2e": "playwright test",
     "temporal:worker": "tsx src/temporal/worker.ts",
     "temporal:check": "tsc --noEmit",
-    "temporal:bundle": "tsx src/temporal/bundle-check.ts"
+    "temporal:bundle": "tsx src/temporal/bundle-check.ts",
+    "demo:cleanup": "tsx scripts/cleanup-seeded-apps.ts"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.7.6",
