@@ -57,3 +57,7 @@ P3：AI 拆解 → 人审 → 新仓库模板；P5/P6：编码 → PR/CI → 人
 本文件全部命令、Temporal Worker 实机运行、GitHub Copilot 真实任务及 PR、Mac 上历史恢复：NOT RUN。无本地大模型，无自动合并、生产部署或 Code RAG。
 
 官方参考：https://docs.temporal.io/develop/typescript/workflows ，https://docs.temporal.io/cli
+
+## PR 与 CI 核验关口（第二切片）
+
+Agent 结束后状态 AWAITING_PR_REVIEW，负责人输入 PR 编号并由 Temporal Activity 调用 GitHub 检查：PR 已合并到 dev、描述含 Portal-Requirement-ID: <需求UUID>、合并 SHA 上所有 Check Runs 均成功。缺少任何条件继续等待，不能推断 CI 通过。通过后状态为 AWAITING_TEST_RELEASE，**仍需后续 GitOps/Argo 工作流验证部署，当前并未自动发布**。

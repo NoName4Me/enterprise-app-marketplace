@@ -33,6 +33,7 @@ export async function createCodingTask(input: DeliveryInput, plan: string): Prom
     "Read repository instructions. Test changes, create a PR to dev.",
     "Do NOT merge, deploy or access the Mac mini or production credentials.",
     "Requirement ID: " + input.requirementId,
+    "Include exactly in PR description: Portal-Requirement-ID: " + input.requirementId,
     "Title: " + input.title,
     "Description: " + input.description.slice(0, 3000),
     "Human-approved plan: " + plan.slice(0, 3500),
@@ -74,4 +75,39 @@ Promise<{kind:"RUNNING"|"DONE"|"FAILED";note:string}> {
       return {kind:"FAILED",note:"GitHub 报告 Agent 未成功完成。"};
     return {kind:"RUNNING",note:"GitHub Agent 当前状态："+(state||"未知")};
   } catch {return {kind:"RUNNING",note:"暂时无法读取 GitHub 任务进度。"};}
+}
+
+export async function verifyMergedPullRequest(repository: string, number: number, requirementId: string):
+Promise<{verified:boolean;note:string;url?:string}> {
+  if (!Number.isSafeInteger(number) || number < 1 || number > 1_000_000_000)
+    return {verified:false,note:"无效 PR 编号。"};
+  const headers=gitHeaders();
+  if (!headers) return {verified:false,note:"GitHub API Token 未配置。"};
+  try {
+    const response=await fetch(ghBase+"/repos/"+repository+"/pulls/"+number,{
+      headers,cache:"no-store",redirect:"error",signal:AbortSignal.timeout(10000),
+    });
+    if (!response.ok) return {verified:false,note:"未取得 GitHub PR 记录。"};
+    const pr=await response.json() as {
+      merged?:boolean;base?:{ref?:string};body?:unknown;merge_commit_sha?:unknown;html_url?:unknown
+    };
+    if (pr.merged !== true || pr.base?.ref !== "dev")
+      return {verified:false,note:"PR 尚未合并至 dev。"};
+    if (typeof pr.body !== "string" || !pr.body.includes("Portal-Requirement-ID: "+requirementId))
+      return {verified:false,note:"PR 描述缺少与当前需求对应的 Portal-Requirement-ID。"};
+    const sha=typeof pr.merge_commit_sha==="string"?pr.merge_commit_sha:"";
+    if (!/^[a-f0-9]{40}$/.test(sha)) return {verified:false,note:"PR 合并 SHA 无法核对。"};
+    const checked=await fetch(ghBase+"/repos/"+repository+"/commits/"+sha+"/check-runs?per_page=100",{
+      headers,cache:"no-store",redirect:"error",signal:AbortSignal.timeout(10000),
+    });
+    if(!checked.ok)return {verified:false,note:"合并 SHA 的 GitHub Checks 不可读取。"};
+    const body=await checked.json() as {total_count?:number;check_runs?:{status?:string;conclusion?:string}[]};
+    const checks=Array.isArray(body.check_runs)?body.check_runs:[];
+    if(!checks.length||body.total_count!==checks.length||
+       checks.some(x=>x.status!=="completed"||x.conclusion!=="success"))
+      return {verified:false,note:"CI 检查未全部通过或存在未读取的分页。"};
+    const url=typeof pr.html_url==="string"&&pr.html_url.startsWith("https://github.com/")
+      ?pr.html_url.slice(0,400):undefined;
+    return {verified:true,note:"PR 已合并到 dev，合并 SHA 的全部 GitHub Checks 为成功；尚未部署。",url};
+  } catch {return {verified:false,note:"GitHub 请求失败；不能认为 PR 或 CI 已验证。"};}
 }

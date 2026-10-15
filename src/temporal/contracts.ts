@@ -9,13 +9,14 @@ export type DeliveryInput = {
 };
 export type DeliveryStage =
   | "ANALYZING" | "AWAITING_APPROVAL" | "REJECTED" | "DISPATCHING"
-  | "AGENT_RUNNING" | "AWAITING_PR_REVIEW" | "NEEDS_RECONCILIATION"
+  | "AGENT_RUNNING" | "AWAITING_PR_REVIEW" | "VERIFYING_PR" | "AWAITING_TEST_RELEASE" | "NEEDS_RECONCILIATION"
   | "PROVIDER_REJECTED" | "FOLLOW_UP_REQUIRED";
 export type DeliverySnapshot = {
   stage: DeliveryStage;
   plan: string | null;
   repository: string;
   externalTaskId: string | null;
+  reviewedPrUrl?: string;
   note: string;
   lastCheckedAt: string | null;
 };

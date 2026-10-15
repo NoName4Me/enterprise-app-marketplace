@@ -5,6 +5,7 @@ type Snapshot = {
   plan: string | null;
   repository: string;
   externalTaskId: string | null;
+  reviewedPrUrl?: string;
   note: string;
   lastCheckedAt: string | null;
 };
@@ -12,7 +13,8 @@ type ResponseData = { state: string; workflowId?: string; snapshot?: Snapshot; n
 export function CodingAgentPanel({ requirementId }: { requirementId: string }) {
   const [value,setValue] = useState<ResponseData|null>(null);
   const [busy,setBusy] = useState(false), [error,setError] = useState("");
-  async function send(method: "GET"|"POST"|"PATCH", decision?: "APPROVE"|"REJECT") {
+  const [prNumber,setPrNumber] = useState("");
+  async function send(method: "GET"|"POST"|"PATCH", decision?: "APPROVE"|"REJECT"|"VERIFY_PR") {
     if (busy) return;
     if (decision==="APPROVE" && !confirm("确定按已展示方案启动云端 Coding Agent？编码后仍需独立 PR/CI 审核。")) return;
     setBusy(true);setError("");
@@ -20,7 +22,7 @@ export function CodingAgentPanel({ requirementId }: { requirementId: string }) {
       const r=await fetch("/api/requirements/"+requirementId+"/coding-task", {
         method,cache:"no-store",
         ...(method==="GET" ? {} : {headers: {"Content-Type":"application/json"},
-          body: JSON.stringify(decision ? {decision} : {})}),
+          body: JSON.stringify(decision==="VERIFY_PR"?{decision,prNumber:Number(prNumber)}:decision?{decision}:{})}),
       });
       const d=await r.json() as ResponseData;
       if (!r.ok) throw new Error(
@@ -47,6 +49,12 @@ export function CodingAgentPanel({ requirementId }: { requirementId: string }) {
         <p className="muted">{value.snapshot.note}</p>
         {value.snapshot.plan&&<article><h4>待确认的实施建议</h4><p className="pre-wrap">{value.snapshot.plan}</p></article>}
         {value.snapshot.externalTaskId&&<p>GitHub 外部任务 ID：{value.snapshot.externalTaskId}</p>}
+        {value.snapshot.reviewedPrUrl&&<p><a href={value.snapshot.reviewedPrUrl} target="_blank" rel="noopener noreferrer">已验证的 PR</a></p>}
+        {value.snapshot.stage==="AWAITING_PR_REVIEW"&&<div className="stack">
+          <label>PR 编号<input type="number" min={1} step={1} value={prNumber} onChange={e=>setPrNumber(e.target.value)} /></label>
+          <button type="button" disabled={busy||!/^[1-9][0-9]{0,8}$/.test(prNumber)}
+            onClick={()=>void send("PATCH","VERIFY_PR")}>通过 GitHub 核验 PR 与 CI</button>
+        </div>}
         {value.snapshot.stage==="AWAITING_APPROVAL"&&<div className="actions">
           <button disabled={busy} type="button" onClick={()=>void send("PATCH","APPROVE")}>确认计划并派发</button>
           <button disabled={busy} type="button" className="button-secondary" onClick={()=>void send("PATCH","REJECT")}>拒绝计划</button>

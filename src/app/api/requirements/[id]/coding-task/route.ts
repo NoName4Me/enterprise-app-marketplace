@@ -1,6 +1,6 @@
 import { route } from "@/domain/route";
 import { assetWrite } from "@/domain/asset-route";
-import { getDelivery, startDelivery, reviewDelivery } from "@/domain/temporal-delivery";
+import { getDelivery, startDelivery, reviewDelivery, verifyDeliveryPr } from "@/domain/temporal-delivery";
 import { AppError } from "@/domain/app-errors";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +16,8 @@ export function POST(req: Request,c:Context) {
 }
 export function PATCH(req:Request,c:Context) {
   return assetWrite(req,async (actor,body) => {
+    if(body.decision==="VERIFY_PR"&&Object.keys(body).every(k=>["decision","prNumber"].includes(k)))
+      return verifyDeliveryPr(actor,(await c.params).id,Number(body.prNumber));
     if(Object.keys(body).some(k=>k!=="decision") ||
       (body.decision!=="APPROVE"&&body.decision!=="REJECT"))
       throw new AppError(422,"invalid_decision");

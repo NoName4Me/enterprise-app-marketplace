@@ -72,3 +72,20 @@ export async function reviewDelivery(actor:Actor|null,requirementId:string,decis
       note:"Temporal 接受审批信号，工作流稍后推进。信号已送达不代表 Coding Agent 启动成功。"};
   });
 }
+
+export async function verifyDeliveryPr(actor:Actor|null,requirementId:string,prNumber:number){
+  const {req,actorData}=await permittedOwner(actor,requirementId);
+  const repository=await sourceRepo(req.appId!);
+  if(!Number.isSafeInteger(prNumber)||prNumber<1||prNumber>1_000_000_000)
+    throw new AppError(422,"invalid_pr_number");
+  const workflowId=workflowIdFor(requirementId);
+  return withClient(async client=>{
+    const handle=client.getHandle(workflowId);
+    const snapshot=await handle.query<DeliverySnapshot>("deliveryStatus");
+    if(snapshot.stage!=="AWAITING_PR_REVIEW"||snapshot.repository!==repository)
+      throw new AppError(409,"delivery_not_ready");
+    await handle.signal("requestPrVerification",prNumber,actorData.id);
+    return {state:"SIGNAL_ACCEPTED",workflowId,
+      note:"Temporal 接受 PR 核验请求，真实合并与 CI 结果需再次读取流程状态。"};
+  });
+}

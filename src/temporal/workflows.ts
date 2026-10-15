@@ -4,14 +4,15 @@ import type * as activities from "./activities";
 
 export const deliveryStatus = defineQuery<DeliverySnapshot>("deliveryStatus");
 export const reviewDeliveryPlan = defineSignal<["APPROVE" | "REJECT", string]>("reviewDeliveryPlan");
+export const requestPrVerification = defineSignal<[number,string]>("requestPrVerification");
 
 const { prepareDeliveryPlan } = proxyActivities<Pick<typeof activities, "prepareDeliveryPlan">>({
   startToCloseTimeout: "45 seconds",
   retry: { maximumAttempts: 2 },
 });
 // GitHub task creation has an ambiguous-outcome hazard: NEVER auto retry a timed-out POST.
-const { createCodingTask, getCodingTaskProgress } = proxyActivities<
-  Pick<typeof activities, "createCodingTask" | "getCodingTaskProgress">
+const { createCodingTask, getCodingTaskProgress, verifyMergedPullRequest } = proxyActivities<
+  Pick<typeof activities, "createCodingTask" | "getCodingTaskProgress" | "verifyMergedPullRequest">
 >({
   startToCloseTimeout: "30 seconds",
   retry: { maximumAttempts: 1 },
@@ -23,11 +24,18 @@ export async function deliveryWorkflow(input: DeliveryInput): Promise<DeliverySn
     externalTaskId: null, note: "需求分析中", lastCheckedAt: null,
   };
   let decision: "APPROVE" | "REJECT" | null = null;
+  let prNumber: number | null = null;
   setHandler(deliveryStatus, () => state);
   setHandler(reviewDeliveryPlan, (value, actorId) => {
     if (state.stage === "AWAITING_APPROVAL" && decision === null) {
       decision = value;
       state = { ...state, note: "人工决策："+value+"；操作人："+actorId };
+    }
+  });
+  setHandler(requestPrVerification,(number,actorId)=>{
+    if(state.stage==="AWAITING_PR_REVIEW"&&prNumber===null){
+      prNumber=number;
+      state={...state,note:"用户 "+actorId+" 请求验证 PR #"+number};
     }
   });
   state = { ...state, plan: await prepareDeliveryPlan(input), stage: "AWAITING_APPROVAL",
@@ -45,15 +53,32 @@ export async function deliveryWorkflow(input: DeliveryInput): Promise<DeliverySn
     note: dispatch.reason };
   state = { ...state, stage: "AGENT_RUNNING", externalTaskId: dispatch.taskId, note: "GitHub Coding Agent 执行中；PR 和 CI 尚未核验。" };
 
-  // Bounded polling in first cut; later replace with webhook/signal and Continue-as-New.
-  for (let attempt = 0; attempt < 240; attempt++) {
+
+  // A bounded interval avoids unbounded event history; later use GitHub webhooks and Continue-as-New.
+  let finished=false;
+  for(let attempt=0;attempt<240;attempt++){
     await sleep("5 minutes");
-    const progress = await getCodingTaskProgress(input.repository, dispatch.taskId);
-    state = { ...state, lastCheckedAt: new Date().toISOString(), note: progress.note };
-    if (progress.kind === "DONE") return { ...state, stage: "AWAITING_PR_REVIEW",
-      note: "Agent 执行结束；人工审查 PR/CI 后才能进入 GitOps 发布。" };
-    if (progress.kind === "FAILED") return { ...state, stage: "FOLLOW_UP_REQUIRED",
-      note: "Agent 执行失败，需负责人检查，不自动重复派发任务。" };
+    const progress=await getCodingTaskProgress(input.repository,dispatch.taskId);
+    state={...state,lastCheckedAt:new Date().toISOString(),note:progress.note};
+    if(progress.kind==="DONE"){
+      finished=true;
+      state={...state,stage:"AWAITING_PR_REVIEW",
+        note:"Agent 完成后仍需核对合并 PR、需求关联和 GitHub Checks。"};
+      break;
+    }
+    if(progress.kind==="FAILED")return {...state,stage:"FOLLOW_UP_REQUIRED",
+      note:"Coding Agent 执行失败，未自动重新派发。"};
   }
-  return { ...state, stage: "FOLLOW_UP_REQUIRED", note: "超过观察窗口，需由后续事件接入继续推进。" };
+  if(!finished)return {...state,stage:"FOLLOW_UP_REQUIRED",
+    note:"自动轮询窗口结束，需人工核对外部状态。"};
+  while(true){
+    await condition(()=>prNumber!==null);
+    const number=prNumber!;
+    prNumber=null;
+    state={...state,stage:"VERIFYING_PR",note:"正在调用 GitHub 核对 PR 与 CI…"};
+    const result=await verifyMergedPullRequest(input.repository,number,input.requirementId);
+    if(result.verified)return {...state,stage:"AWAITING_TEST_RELEASE",reviewedPrUrl:result.url,
+      note:result.note+"；等待下阶段 GitOps/Argo 验收。"};
+    state={...state,stage:"AWAITING_PR_REVIEW",note:result.note};
+  }
 }
