@@ -36,6 +36,8 @@ export default async function ManagedApplication({params,searchParams}:{
  const latest=app.revisions[0];
  const editable=mayCreateApp(user)&&app.lifecycleStatus!=="RETIRED";
  const hosted=app.sourceKind==="HOSTED";
+ const testEndpoint=app.hostedEndpoints.find(x=>x.environment==="TEST");
+ const productionEndpoint=app.hostedEndpoints.find(x=>x.environment==="PRODUCTION");
  const root="/api/my/apps/"+id;
  const repo=app.sourceRepository;
  return <SiteNav user={user} title={latest.name||"应用详情"}>
@@ -53,8 +55,8 @@ export default async function ManagedApplication({params,searchParams}:{
   {view==="overview"&&<div className="stack">
     <section className="app-status-grid">
       <div className="card app-status-tile"><span>应用来源</span><strong>{hosted?"GitHub 托管":"外部链接"}</strong></div>
-      <div className="card app-status-tile"><span>测试环境</span><strong>{hosted?"已建立 · 未验证部署":"不适用"}</strong></div>
-      <div className="card app-status-tile"><span>生产环境</span><strong>{hosted?"尚未发布":"由外部系统管理"}</strong></div>
+      <div className="card app-status-tile"><span>测试环境</span><strong>{hosted?(testEndpoint?.state==="READY"?"已验证部署":"已预留 · 未验证"):"不适用"}</strong></div>
+      <div className="card app-status-tile"><span>生产环境</span><strong>{hosted?(productionEndpoint?.state==="READY"?"已验证部署":"尚未发布"):"由外部系统管理"}</strong></div>
     </section>
     <section className="card">
       <div className="section-title"><h3>下一步</h3><Link href={"/my/apps/"+id+"?view=settings"}>管理应用信息 →</Link></div>
@@ -79,9 +81,10 @@ export default async function ManagedApplication({params,searchParams}:{
       <div className="section-title"><h3>发布与版本</h3><span className="tag">{hosted?"平台托管":"外部应用"}</span></div>
       {!hosted?<p>这是外部应用。部署、回滚和版本更新由目标系统负责；平台只管理应用访问入口和市场信息。</p>:<>
         <p>测试环境和生产环境由平台自动创建。生产只能晋级测试验证通过的同一个镜像 Digest，不能直接从 GitHub 分支跳过测试部署。</p>
-        <div className="release-lanes"><article><h4>测试环境</h4><p className="muted">尚未取得已验证的部署版本</p>
-          <span className="tag">待连接通用构建/部署器</span></article>
-        <article><h4>生产环境</h4><p className="muted">没有可晋级的测试版本</p><span className="tag">尚未发布</span></article></div>
+        <div className="release-lanes"><article><h4>测试环境</h4><p className="muted">预留端口：{testEndpoint?.port??"未分配"} · {testEndpoint?.state??"未预留"}</p>
+          {testEndpoint?.url?<a href={testEndpoint.url} target="_blank" rel="noopener noreferrer">访问测试环境 →</a>:<span className="tag">待验证镜像与访问</span>}</article>
+        <article><h4>生产环境</h4><p className="muted">预留端口：{productionEndpoint?.port??"未分配"} · {productionEndpoint?.state??"未预留"}</p>
+          {productionEndpoint?.url?<a href={productionEndpoint.url} target="_blank" rel="noopener noreferrer">访问生产环境 →</a>:<span className="tag">尚未发布</span>}</article></div>
         <p className="notice">当前仓库只具备 marketplace-lab 的实验发布适配器，尚不能安全部署任意新仓库；因此不提供会误导用户的「一键发布」按钮。通用发布器接通后，这里将直接选择版本并触发 Temporal 流程。</p>
       </>}
     </section>
