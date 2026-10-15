@@ -301,3 +301,7 @@ pnpm demo:cleanup           # 结果应显示 0 个匹配
 上面的命令**未由本次远程代码修改在你的 Mac 执行**。如预览显示不属于内置演示的应用，**停止，不执行 --apply**。这与删除任意用户草稿是两种操作，切勿通过编辑 SQL 解除限制。
 
 应用负责人可在「我管理的应用 → 应用详情 → 设置 → 删除此草稿」删除**唯一初始 DRAFT、从未送审、无需求/访问/运行记录**的应用。托管草稿还会释放仅处于 RESERVED 状态的 TEST/PRODUCTION 端口；一旦提交市场审核或实际部署，后端拒绝直接删除。不同账号无法删除不属于自己的草稿。
+
+## 托管应用真正发布的增量配置（0011）
+
+**这不是重新安装指南。** 新版发布由 [HOSTED_RELEASE.md](HOSTED_RELEASE.md) 说明，需源仓库管理员安装构建 Workflow 模板、更新已有门户与 Worker 的 Kubernetes Secrets、更新 Worker ARM64 镜像，在 `market` 备份后仅执行新的 `0011` 迁移。初次通用发布还需要经 GitHub 人工批准 GitOps PR；验证 Argo 与 LAN NodePort，不能通过 CI 结果代替现场核验。项目的 PostgreSQL/Temporal/Argo/K8s 实例和所有现有卷**不重建、不清空**。
