@@ -17,6 +17,7 @@ export type DeliverySnapshot = {
   repository: string;
   externalTaskId: string | null;
   reviewedPrUrl?: string;
+  reviewedMergeSha?: string; // GitHub-verified dev merge SHA; never a client assertion.
   note: string;
   lastCheckedAt: string | null;
 };
