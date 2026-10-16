@@ -227,8 +227,10 @@ function argoUrl():URL|null{
 async function argo(path:string,init:RequestInit={}):Promise<Response>{
   const url=argoUrl(),access=token("HOSTED_ARGO_APPLICATION_TOKEN");
   if(!url||!access)throw new Error("argo_not_configured");
-  url.pathname=url.pathname.replace(/\/$/,"")+path;
-  return fetch(url,{...init,headers:{
+  // Resource requests include a query string; assigning it to pathname would
+  // escape '?' and send the request to a nonexistent Argo endpoint.
+  const endpoint=new URL(url.pathname.replace(/\/$/,"")+path,url);
+  return fetch(endpoint,{...init,headers:{
     Authorization:"Bearer "+access,Accept:"application/json","Content-Type":"application/json",
   },cache:"no-store",redirect:"error",signal:AbortSignal.timeout(10000)});
 }
@@ -247,7 +249,7 @@ export async function registerHostedArgoApp(input:HostedReleaseInput):Promise<Ex
   };
   try{
     const response=await argo("/api/v1/applications",{method:"POST",
-      body:JSON.stringify({application})});
+      body:JSON.stringify(application)});
     if(!response.ok&&response.status!==409)
       return {kind:response.status<500?"REJECTED":"UNKNOWN",
         reason:"Argo 不接受应用注册，请核对 Project/Token 权限："+response.status};
@@ -270,12 +272,32 @@ Promise<{ready:boolean;note:string}>{
     if(!response.ok)return {ready:false,note:"Argo Application 不可读"};
     const app=await json(response),status=value(app.status),meta=value(app.metadata);
     const labels=value(meta.labels);
-    const sync=value(status.sync),health=value(status.health),summary=value(status.summary);
+    const sync=value(status.sync),health=value(status.health);
     if(labels["marketplace-app-id"]!==input.appId ||
       labels["marketplace-environment-id"]!==input.environmentId ||
-      sync.status!=="Synced"||health.status!=="Healthy"||
-      !Array.isArray(summary.images)||!summary.images.includes(image))
-      return {ready:false,note:"Argo 未确认应用归属、Synced/Healthy 或镜像 Digest"};
+      sync.status!=="Synced"||health.status!=="Healthy")
+      return {ready:false,note:"Argo 未确认应用归属或 Synced/Healthy"};
+    // Argo 3.5 can omit summary.images. Verify the live Deployment instead
+    // of relying on an optional summary or a previous sync's image list.
+    const deploymentResponse=await argo("/api/v1/applications/"+ns+"/resource?"+
+      new URLSearchParams({namespace:ns,resourceName:"web",version:"v1",
+        group:"apps",kind:"Deployment"}).toString());
+    if(!deploymentResponse.ok)return {ready:false,note:"无法读取实际 Deployment"};
+    const deploymentResource=await json(deploymentResponse),rawDeployment=str(deploymentResource.manifest);
+    if(!rawDeployment||rawDeployment.length>48000)return {ready:false,note:"Deployment 清单不可读"};
+    const deployment=value(JSON.parse(rawDeployment) as unknown);
+    const deploymentMeta=value(deployment.metadata),deploymentSpec=value(deployment.spec);
+    const deploymentStatus=value(deployment.status);
+    const containers=value(value(deploymentSpec.template).spec).containers;
+    const desired=num(deploymentSpec.replicas);
+    const generation=num(deploymentMeta.generation),observed=num(deploymentStatus.observedGeneration);
+    if(deploymentMeta.name!=="web"||deploymentMeta.namespace!==ns||
+      !Array.isArray(containers)||!containers.some(c=>value(c).name==="web"&&value(c).image===image)||
+      !Number.isSafeInteger(desired)||desired<1||
+      !Number.isSafeInteger(generation)||generation<1||!Number.isSafeInteger(observed)||observed<generation||
+      num(deploymentStatus.updatedReplicas)!==desired||num(deploymentStatus.replicas)!==desired||
+      num(deploymentStatus.availableReplicas)<desired)
+      return {ready:false,note:"实际 Deployment 镜像或就绪副本尚未匹配"};
     // A successful HTTP GET on an occupied NodePort is not sufficient:
     // prove the Service belongs to this app and uses its RESERVED port.
     const resourcePath="/api/v1/applications/"+ns+"/resource?"+

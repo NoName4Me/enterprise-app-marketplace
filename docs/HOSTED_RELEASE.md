@@ -24,7 +24,7 @@
 - 门户原 `portal-runtime` Secret 还需 `HOSTED_PUBLIC_IP=<稳定且从 Worker 能访问的内网 IPv4>`，`P4_DEPLOY_OPERATOR_IDS=<实际用户ID>`。前者只用于实际 READY 访问链接，不表示已开放 LAN 端口。
 - Temporal Worker 使用 `portal-worker-runtime` Secret，新增 `DATABASE_URL=<现有 market 的 Kubernetes 可达地址>`、`HOSTED_GITHUB_SOURCE_TOKEN`（源仓库 Actions 读写、内容/Deployment 只读）、`HOSTED_GITOPS_TOKEN`（**仅平台 GitOps 仓库** Contents + PR 写）、`HOSTED_ARGO_APPLICATION_TOKEN`（**只允许受限 project** `marketplace-hosted` 的 Applications create/get）、`ARGOCD_SERVER_URL` 及相同 `HOSTED_PUBLIC_IP`。生产密钥严格分离，不放源仓库 Actions，也不通过浏览器传给用户。
 - Argo CD 管理员安装本仓库的 `p4/gitops/hosted/project.yaml`。确保当前平台 repo 的 `dev` 允许受控 GitOps PR、合并受分支保护/必需 CI 和批准人限制；平台默认不会替人批准 PR。
-- 使用本机代理时，Node Worker 需显式配置 `NODE_USE_ENV_PROXY=1`、`HTTP_PROXY`、`HTTPS_PROXY`，并通过 `NO_PROXY` 排除集群 Service DNS 与内网 IP；仅设置系统代理不会保证 Node fetch 能访问 GitHub。此配置要求支持该开关的 Node 22 版本。
+- 使用本机代理时，Node Worker 需显式配置 `NODE_USE_ENV_PROXY=1`、`HTTP_PROXY`、`HTTPS_PROXY`，并通过 `NO_PROXY` 排除集群 Service DNS 与实际的 `HOSTED_PUBLIC_IP`（显式列出 IP，不只填写 CIDR）；仅设置系统代理不会保证 Node fetch 能访问 GitHub。此配置要求支持该开关的 Node 22 版本。
 - Worker 使用新 Dockerfile 构建 ARM64 镜像并滚动替换 `portal-temporal-worker`。检查其可访问 GitHub REST、现有 PostgreSQL、Argo ClusterIP 和固定 NodePort。
 
 ```sh
@@ -40,7 +40,7 @@ kubectl get svc -A -o wide
 
 - GitHub 构建 Workflow 必须返回与应用 ID、源码 SHA、Run ID 一一对应的**唯一** GHCR Digest；不能使用 `latest` 或无审核镜像。
 - GitOps 变更只创建 PR，不直接操纵业务 Pod；Argo Application 只在 PR 合并后注册。
-- Argo 返回 `Synced` **不等于**真实服务通过，必须再确认 `Healthy`、Digest 一致及 NodePort HTTP。
+- Argo 返回 `Synced` **不等于**真实服务通过，必须再确认 `Healthy`，读取实际 Deployment 核对 Digest、generation 和就绪副本，读取 Service 核对归属与 NodePort，最后验证 HTTP。Argo 3.5 的 `status.summary.images` 可能为空，不能依赖该可选摘要，也不能用上一次同步的镜像记录代替实际资源。
 - 后端 ledger `hosted_releases` 与 Temporal 执行历史分开持久化；远端创建分支/PR 超时会停在 `NEEDS_RECONCILIATION`，不允许自动二次派发。
 - 同环境一次只允许一条未决发布；升级过程中保留旧 READY 的镜像和访问入口，直到新镜像验证成功。
 - 目前自动 HTTP 检查从**Worker 所在网络**发起；它不能代替从员工的 LAN 客户端测试。发布在真实 Mac mini 上仍需验证 OrbStack NodePort 映射及入站防火墙。
