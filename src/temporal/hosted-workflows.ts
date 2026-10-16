@@ -3,7 +3,7 @@ import type * as hosted from "./hosted-activities";
 import type * as kube from "./hosted-kubernetes";
 import type {HostedReleaseInput,HostedReleaseSnapshot} from "./hosted-contracts";
 
-// New workflow type: old GitOps histories continue replaying without code-path changes.
+// Single HOSTED release workflow: build immutable digest, deploy with Kubernetes, verify.
 const statusQuery=defineQuery<HostedReleaseSnapshot>("hostedReleaseStatus");
 const {dispatchHostedBuild}=proxyActivities<Pick<typeof hosted,"dispatchHostedBuild">>({
   startToCloseTimeout:"90 seconds",retry:{maximumAttempts:1}
@@ -35,7 +35,7 @@ export async function hostedReleaseWorkflow(input:HostedReleaseInput):Promise<Ho
     state={...state,stage,note};await recordHostedRelease(state);
   }
   try{
-    // Verify that a previous Argo controller has relinquished ownership BEFORE any build or write.
+    // Verify the application namespace is initialized and belongs to this environment.
     const preflight=await preflightHostedKube(input);
     if(preflight.kind!=="ACCEPTED"){
       await move("FAILED",preflight.reason);return state;
