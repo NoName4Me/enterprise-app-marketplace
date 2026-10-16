@@ -4,7 +4,7 @@ import {useCallback,useEffect,useState} from "react";
 type Release={
   id:string;environment:"TEST"|"PRODUCTION";status:string;
   sourceSha:string|null;imageDigest:string|null;buildRunId:string|null;
-  gitopsPrNumber:number|null;note:string;
+  note:string;
 };
 type Step={name:string;number:number;status:string;conclusion:string|null;startedAt:string|null;completedAt:string|null};
 type Job={id:number;name:string;status:string;conclusion:string|null;steps:Step[]};
@@ -12,10 +12,6 @@ type Execution={
   release:Release;
   snapshot:{stage:string;note:string}|null;
   build:{state:"OK"|"NO_BUILD"|"UNAVAILABLE";jobs:Job[];note?:string};
-  deployment:{source:string;state:"OK"|"NOT_CONNECTED"|"UNKNOWN";applications:{
-    name:string;sync:string;health:string;operationPhase:string|null;
-    lastSyncedRevision:string|null;lastSyncedAt:string|null;namespace:string;
-  }[]};
   observedAt:string;
 };
 type StageStatus="done"|"current"|"waiting"|"pending"|"failed";
