@@ -1,5 +1,5 @@
 "use client";
-import {useCallback,useEffect,useState} from "react";
+import {useCallback,useEffect,useRef,useState} from "react";
 import {useRouter} from "next/navigation";
 
 type Release={
@@ -35,16 +35,21 @@ export function HostedReleasePanel({root,repo,productionDigest}:{
   const [selectedTestId,setSelectedTestId]=useState("");
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
+  const ledgerVersion=useRef<string|null>(null);
   const refresh=useCallback(async()=>{
     try{
       const response=await fetch(root+"/hosted/releases",{cache:"no-store"});
       if(!response.ok)throw new Error("无法读取发布记录");
       const value=await response.json() as {releases:Release[]};
+      const version=value.releases.map(r=>r.id+":"+r.status).join(",");
+      const changed=ledgerVersion.current!==null&&ledgerVersion.current!==version;
+      ledgerVersion.current=version;
       setRows(value.releases);
       setError("");
+      if(changed)router.refresh();
     }catch{setError("发布记录暂不可读取，请稍后刷新。");}
     finally{setLoading(false);}
-  },[root]);
+  },[root,router]);
   useEffect(()=>{
     const initial=setTimeout(()=>{void refresh();},0);
     const interval=setInterval(()=>{void refresh();},15000);

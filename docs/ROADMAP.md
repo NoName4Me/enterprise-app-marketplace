@@ -1,6 +1,6 @@
 # 功能优先路线图：从员工任务到真实交付
 
-> **2026-10-15 用户体验优先级提升：** 近期工作首先完成分层导航、来源明确的应用接入、托管应用「仓库 → 构建 → 测试 → 验证 → 同 Digest 生产晋级」通用发布和运行工作台。已提交：导航、应用创建/自动环境、测试/生产端口预约、分区详情、AI 运维呈现；**通用发布编排、实际 NodePort 服务与逐应用监控采集尚未完成**。不把门户内的实验表单或运行指标汇总冒充通用产品。
+> **2026-10-15 用户体验优先级提升：** 近期工作首先完成分层导航、来源明确的应用接入、托管应用「仓库 → 构建 → 测试 → 验证 → 同 Digest 生产晋级」通用发布和运行工作台。已提交：导航、应用创建/自动环境、测试/生产端口预约、分区详情、AI 运维呈现；**通用托管 TEST 发布与实际 NodePort 已于 2026-10-16 在首个真实仓库验证；生产/回退验收及逐应用监控仍待完成**。不把门户内的实验表单或运行指标汇总冒充通用产品。
 
 > **Temporal 架构确定（2026-10-15）**：P3 的长流程、P5/P6 编码审核、P4 发布验证、P7 运维修复及未来 P8 自动建应用统一使用 Temporal。P3 的普通 CRUD、P4 的读监控仍用 PostgreSQL/HTTP；Workflow 不直接调用外部 API。本轮首先实现 P5 分析→人审→Agent 派发→任务跟踪，详情见 [MAC_MINI_SETUP.md](MAC_MINI_SETUP.md)。
 >
@@ -71,4 +71,4 @@
 - 第一阶段（配置生成，**不是一键部署**）：`scripts/p4-hosted-manifest.mjs` 输入真实 App/Environment UUID、已发布 GHCR Digest、NodePort、仓库，生成隔离的 Deployment / NodePort Service 和 Argo Application；`p4/gitops/hosted/project.yaml` 限制 Argo 权限。只有测试镜像通过真实健康/网络探测后，未来才能进入生产晋级流程。另见 `docs/HOSTED_RELEASE.md`。
 - 第二阶段（只读接入）：`devops-scope.ts` 从受权限约束的 Argo 标签校验 HOSTED 应用对应的 `hosted-<appUUID>-test|production` 命名空间，再按环境读取 Prometheus Pod 指标、告警和 Loki 日志。未绑定/未采集的数据保持 UNKNOWN，不复用实验应用数据。
 - 第三阶段（人工确认的初步联动）：运行页的 AI 诊断可作为**可编辑的 BUG 修复需求**提交。负责人确定范围后才进入现有 P3→P5 Temporal 编码审核。**尚未实现自动故障告警触发、Temporal 受控修复执行、自动回滚和事后运行验证**。
-- 本轮只做代码、清单和测试；Mac 实机增量部署、GitHub 真实镜像 Build、NodePort 从 LAN 访问仍然 NOT RUN。不要重复执行全套 MAC_MINI_SETUP。
+- 2026-10-16 已增量更新 Worker，验证真实 Actions/GHCR → GitOps PR 人审 → Argo → TEST NodePort → READY，并从 Worker 与 Mac Chrome 验证访问。独立第二台 LAN 客户端、生产/回退及逐应用监控仍为 NOT RUN。不要重复执行全套 MAC_MINI_SETUP。

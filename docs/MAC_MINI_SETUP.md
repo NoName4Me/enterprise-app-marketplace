@@ -1,6 +1,6 @@
 # Mac mini 统一服务器部署与验收（OrbStack Kubernetes）
 
-> **唯一主入口**。目标硬件：**一台 Mac mini M4 / 16GB**，已安装 OrbStack。**已于 2026-10-15 在用户 Mac 完成本地核心部署与验证；云端 AI/真实发布仍为 NOT RUN**。任何出现错误的步骤先停止并排查，不要重置/清空现有数据库或卷。关联：`p4/temporal/`、`p4/platform/`、`p4/gitops/lab/`、`p4/observability/`。
+> **唯一主入口**。目标硬件：**一台 Mac mini M4 / 16GB**，已安装 OrbStack。**已于 2026-10-15 完成核心部署，2026-10-16 完成首个托管应用 TEST 发布；云端 AI/生产发布仍为 NOT RUN**。任何出现错误的步骤先停止并排查，不要重置/清空现有数据库或卷。关联：`p4/temporal/`、`p4/platform/`、`p4/gitops/lab/`、`p4/observability/`。
 
 ## 0. 整体结构、取舍和边界
 
@@ -146,7 +146,7 @@ docker build --platform linux/arm64 -t marketplace/temporal-worker:dev -f p4/tem
 
 `.env.portal.k8s`：从现有 Mac `.env` **复制必要的服务端配置值**，其中 `DATABASE_URL` 改为 Pod 实测可达的 PG 主机名（**不是 localhost**），`BETTER_AUTH_URL=http://portal.k8s.orb.local` 与实际浏览器地址匹配；包含原 `BETTER_AUTH_SECRET`、DeepSeek API 和门户访问外部源所需的 Token。端口使用 `ARGOCD_SERVER_URL=http://argocd-server.argocd.svc.cluster.local`、`PROMETHEUS_SERVER_URL=http://monitor-kube-prometheus-st-prometheus.monitoring.svc.cluster.local:9090`、`LOKI_SERVER_URL=http://loki-gateway.monitoring.svc.cluster.local:80`（后两者安装后才可用；Prometheus Service 名以 `kubectl -n monitoring get svc` 为准，Chart 可能截断名称）。
 
-`.env.worker.k8s`：**只放 Activity Worker 需要的** `DEEPSEEK_API_KEY`（或 `AIOPS_LLM_API_KEY`）、`AIOPS_LLM_BASE_URL`、`AIOPS_LLM_MODEL`、`P5_COPILOT_USER_TOKEN`。不放门户会话 Secret、`DATABASE_URL` 或 Argo 发布凭据。
+`.env.worker.k8s`：新版 Worker 需要指向现有 `market` 的 Pod 可达 `DATABASE_URL`，用于托管发布账本（不另建数据库）。按已接入功能添加 `DEEPSEEK_API_KEY`（或 `AIOPS_LLM_API_KEY`）、模型配置、`P5_COPILOT_USER_TOKEN`；托管发布所需 GitHub/受限 Argo 凭据见 [HOSTED_RELEASE.md](HOSTED_RELEASE.md)。不放门户会话 Secret，也不因启用测试发布自动授予生产权限。
 
 ```sh
 kubectl -n marketplace create secret generic portal-runtime --from-env-file=.env.portal.k8s --dry-run=client -o yaml | kubectl apply -f -

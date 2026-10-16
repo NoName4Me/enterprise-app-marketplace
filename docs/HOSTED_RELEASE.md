@@ -47,7 +47,9 @@ kubectl get svc -A -o wide
 
 ## 尚未完成与验收状态
 
-**代码 CI 可验证，但尚未在你的 Mac mini 实测真实 GitHub Actions/GHCR、GitOps PR 合并、Argo 同步、NodePort 服务访问、私有 GHCR 拉取和单机重启恢复。** 此项全部标记 `NOT RUN`，不得把合并前的 PR、构建成功或端口预留误称部署完成。
+**2026-10-16 已在 Mac mini 完成首个真实托管仓库的 TEST 链路**：门户 → Temporal → master 完整 CI 校验 → 手动 Actions/GHCR ARM64 → 人工合并 GitOps PR → Argo Synced/Healthy → 实际 Deployment Digest 与就绪副本 → Service NodePort → Worker、Mac 与 Chrome 访问 → 账本 READY；Chrome 的任务新增与完成也已验证。兼容性修复与执行证据记录在 PR #27/#28，不把此次单实例测试视为生产验收。
+
+生产晋级/历史版本回退、独立第二台局域网客户端、私有 GHCR 凭据拉取及应用发布后的整机重启恢复仍为 `NOT RUN`。本轮临时授权只覆盖 TEST；再次发布前须由管理员配置正式受限凭据。
 仍需后续支持自动为任意仓库建立标准构建工作流（当前是一次性管理员接入）、私有 GHCR Pull Secret 自动同步、非 8080 端口与不同业务健康端点、监控/AI 事件自动反馈。
 
 ## 生产版本选择与安全回退（本轮）
