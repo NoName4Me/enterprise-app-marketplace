@@ -77,18 +77,21 @@ export async function getHostedExecution(actor:Actor|null,appId:string,releaseId
 }
 async function boundedText(response:Response){
   const reader=response.body?.getReader();
-  if(!reader)return "";
+  if(!reader)return {text:"",truncated:false};
   const decoder=new TextDecoder();
-  let bytes=0,text="";
+  let bytes=0,text="",truncated=false;
   try{
     while(true){
       const {done,value}=await reader.read();
       if(done)break;
       bytes+=value.length;
-      if(bytes>MAX_LOG_BYTES)throw new AppError(422,"log_too_large");
+      if(bytes>4*1024*1024)throw new AppError(422,"log_too_large");
       text+=decoder.decode(value,{stream:true});
+      if(text.length>MAX_LOG_BYTES){text=text.slice(-MAX_LOG_BYTES);truncated=true;}
     }
-    return text+decoder.decode();
+    text+=decoder.decode();
+    if(text.length>MAX_LOG_BYTES){text=text.slice(-MAX_LOG_BYTES);truncated=true;}
+    return {text,truncated};
   }finally{await reader.cancel().catch(()=>{});}
 }
 export async function readHostedJobLog(actor:Actor|null,appId:string,releaseId:string,jobId:string){
@@ -108,6 +111,9 @@ export async function readHostedJobLog(actor:Actor|null,appId:string,releaseId:s
     const file=await fetch(target,{redirect:"error",cache:"no-store",
       signal:AbortSignal.timeout(15000)});
     if(!file.ok)return {state:"NOT_READY",text:"",note:"日志尚未可下载"};
-    return {state:"OK",text:await boundedText(file),note:"GitHub Actions 作业日志（最多 128 KiB）"};
+    const log=await boundedText(file);
+    return {state:"OK",text:log.text,note:log.truncated?
+      "GitHub Actions 作业日志（仅显示末尾约 128 KiB，完整内容请访问 GitHub）":
+      "GitHub Actions 作业日志"};
   }catch{return {state:"UNAVAILABLE",text:"",note:"日志读取失败，可通过 GitHub Actions 查看原始记录"};}
 }
