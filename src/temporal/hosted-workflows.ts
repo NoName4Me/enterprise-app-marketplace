@@ -16,7 +16,7 @@ const {recordHostedRelease}=proxyActivities<Pick<typeof hosted,"recordHostedRele
 
 export async function hostedReleaseWorkflow(input:HostedReleaseInput):Promise<HostedReleaseSnapshot>{
   let state:HostedReleaseSnapshot={releaseId:input.releaseId,stage:"QUEUED",note:"等待持久任务",
-    sourceSha:null,buildRunId:null,imageDigest:input.imageDigest??null,
+    sourceSha:input.requiredMergeSha??null,buildRunId:null,imageDigest:input.imageDigest??null,
     gitopsPrNumber:null,testedAt:null};
   setHandler(hostedReleaseStatus,()=>state);
   async function move(stage:HostedReleaseSnapshot["stage"],note:string){
