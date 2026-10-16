@@ -4,6 +4,8 @@ export type HostedReleaseInput = {
   environmentId:string;nodePort:number;repository:string;
   // Production consumes a previously VERIFIED TEST digest, never rebuilds.
   imageDigest?:string;
+  // P5 handoff only: build source must descend from this GitHub-verified dev PR merge SHA.
+  requiredMergeSha?:string;
 };
 export type HostedReleaseStage =
   | "QUEUED"|"BUILDING"|"WAITING_BUILD"|"OPENING_PR"|"AWAITING_PR"
