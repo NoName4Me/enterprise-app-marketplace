@@ -97,7 +97,7 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
     }
     const releaseId=randomUUID(),workflowId="hosted-release-"+releaseId;
     await tx.insert(hostedReleases).values({id:releaseId,appId,requestedBy:user.id,
-      requirementId:linkage?.requirementId,sourceSha:linkage?.requiredMergeSha,
+      requirementId:linkage?.requirementId,
       environment,workflowId,note:"已受理发布请求，等待 Temporal"});
     const input:HostedReleaseInput={releaseId,appId,environment,environmentId:env.id,
       nodePort:port.nodePort,repository:app.sourceRepository,imageDigest,
