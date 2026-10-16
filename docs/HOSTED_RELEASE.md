@@ -87,3 +87,25 @@ kubectl get svc -A -o wide
 - 门户构建日志必须配置 `HOSTED_GITHUB_LOG_TOKEN`（只读 Actions 权限），避免匿名 GitHub REST API 配额失败。缺少令牌时直接给出配置提示，不持续发起匿名轮询。
 - 增量 migration `0013_release_labels_and_issue_cleanup`：只增加发布元数据列并删除已废弃的 `requirements.github_issue_url`；**不删除需求、讨论、应用与历史发布记录**。源表升级前备份并验证。产品不再使用 GitHub Issues 管理需求。
 - **注意：当前这批代码尚未取消 GitOps PR！** 直接 Kubernetes 发布和原 Argo Application 安全移交是下一个独立切片，未完成前继续遵守旧发布链路，不得同时由 Argo 和门户修改相同 Deployment。
+
+## P4 新直接部署模式（实验性，需实机验收）
+
+**此节覆盖上文旧 GitOps TEST/PRODUCTION 流程的对应说明。** 旧模式仍为默认值，已经完成 2026-10-16 Mac mini E2E 验收。新模式目前仅完成代码和 CI 候选实现，Mac mini **NOT RUN**。
+
+新发布链：门户选择源码分支/Commit + 版本号 + 发布说明 → GitHub Actions/GHCR → Temporal Worker 在**对应已登记的应用/环境 namespace** 更新 Kubernetes Deployment/Service → 核对实际 Pod 镜像 Digest、就绪、副本及 NodePort HTTP → READY。不再为每次业务发布创建本平台的 GitOps PR。PRODUCTION 只复用历史 TEST READY 的 Digest，且继续使用既有 `P4_DEPLOY_OPERATOR_IDS` 授权。
+
+**上线和接管步骤（管理员逐环境执行）**：
+
+1. 先备份现有 `market`，在隔离库验证并增量执行 `0013_release_labels_and_issue_cleanup`。它保留历史发布、需求和版本数据，增加 `deploy_driver/source_ref/version_label/release_notes`，删除不再使用的 `requirements.github_issue_url`；禁止清空卷或重建集群。
+2. 在 Mac mini 先确认旧的 Argo Application 及其关联的资源归属。每个环境的命名空间为 `hosted-<应用 UUID 去掉连字符>-test` 或 `-production`。保留命名空间、Deployment、Service、PVC 和已有服务。**新模式的 Worker 会拒绝操作仍被旧 Argo Application 管理的环境**。
+3. 在核实 Application 的 Project、source.path 和目标 namespace 是预期业务环境、且确认非平台自身服务后，由管理员对该**具体应用环境**取消 Argo Application 的资源删除 finalizer，再删除其 Application CR；不能使用默认级联删除来移除托管的业务对象。先确认删除后 Pod 和 Service 仍存在，且没有别的 GitOps controller 再同步。该动作需管理员人工核对，不由 Portal 自动删除。
+4. 初始化每个业务环境的最小权限部署通道：执行 `bash p4/temporal/provision-hosted-access.sh <app-uuid> <env-uuid> TEST`（生产环境将 TEST 换成 PRODUCTION）。该脚本仅创建/验证 namespace 标签，并在该 namespace 建立 ServiceAccount `marketplace:portal-hosted-worker` 专用的 Deployment/Service get/create/patch RoleBinding；Namespace get 为集群范围只读授权。它**不会**删除旧业务资源、改镜像、安装 Argo 或删除旧卷。新创建的应用在首次发布前也需要相同初始化，后续再做受控自动 bootstrap。
+5. 应用新版 `p4/temporal/worker.yaml`（新增 `portal-hosted-worker` ServiceAccount，先创建再滚动 Worker），检查 ServiceAccount token/CA 挂载、Kubernetes API、Argo 只读检查和目标 namespace 的操作权限。先升级 Worker，确认可处理 `directHostedReleaseWorkflow`，再升级 Portal。
+6. 仅在门户 `portal-runtime` Secret 设置 `HOSTED_DEPLOY_DRIVER=kubernetes`，并滚动更新门户；Worker 使用自身集群权限执行 Activity，不需要额外安装 Docker 或把 kubeconfig 暴露给浏览器。生产授权、镜像 Digest、发布账本与 Temporal 旧任务仍保留。**不要在仍有旧 GitOps release 正在等待 PR 或部署时切换。**
+7. 使用 TEST 发布一个新版本做 Mac mini 实验验证；同时检查命名空间、Deployment、Pod、Service、Pod logs、Temporal 快照与门户 READY，以及第二个局域网客户端。PRODUCTION/回滚需另做验收。
+
+回退 `HOSTED_DEPLOY_DRIVER` 不会自动重新创建此前被移除的 Argo Application；已经移交的环境要重新使用旧 GitOps 模式，必须先由管理员按原 GitOps 仓库目标状态重新受控注册/核对 Argo Application，**绝不可让两个管理器同时修改 Deployment**。正在运行的旧 Temporal GitOps Workflow 不改写，新 Workflow 通过独立类型避免执行历史回放不兼容。
+
+**构建模板同步**：平台新 `templates/github/marketplace-build.yml` 支持任意仓库内的 Commit SHA；已经安装旧模板的源码仓库必须更新模板并通过相应代码审核，否则旧模板仍会要求 `master`。此阶段暂未实现门户代用户自动安装 Workflow。
+
+**日志配额**：门户 `HOSTED_GITHUB_LOG_TOKEN` 为仅 Actions:read 的独立服务端 Token，未配置则返回显式错误，不消耗匿名 GitHub API 配额；这是本地日志观察能力的接入要求，和 Worker 的 `HOSTED_GITHUB_SOURCE_TOKEN` 分开。
