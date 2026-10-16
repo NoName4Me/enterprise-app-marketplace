@@ -4,6 +4,8 @@ export type HostedReleaseInput = {
   environmentId:string;nodePort:number;repository:string;
   // Human-selected git branch or commit in this application\'s registered source repository.
   sourceRef?:string;
+  // Production inherits the exact source commit validated in TEST.
+  sourceSha?:string;
   // Production consumes a previously VERIFIED TEST digest, never rebuilds.
   imageDigest?:string;
   // P5 handoff only: build source must descend from this GitHub-verified dev PR merge SHA.
