@@ -7,7 +7,7 @@
 - **macOS** 只负责 OrbStack 管理及 `kubectl`、`helm`、`docker` 命令；不作为 Temporal Server / Worker 的常驻运行环境。
 - **OrbStack 内置单节点 Kubernetes** 承载门户 Next.js、Temporal Server/UI、独立的门户 Temporal Activity Worker、Argo CD、Rollouts、Traefik、演示应用、Prometheus 和可选 Loki。**不再创建 Linux VM / 不再安装第二套 k3s**。
 - **已有 Compose PostgreSQL** 暂时保留（`compose.yaml` 的 `market_pg` 卷，当前端口仅绑定 `127.0.0.1:5432`）。不是另起第二套 PG，也不为了统一而迁入 Kubernetes。Temporal 在同一个 PG 实例使用 **temporal** 和 **temporal_visibility** 两个独立数据库和账号；原有 **market** 保持原样。
-- **GitHub Actions / GHCR** 仍承担可信构建；**Argo CD / Rollouts** 负责实际 GitOps 调谐和切流；**Temporal** 才负责跨系统等待、审批、可恢复长任务。P3 普通 CRUD 与 P4 只读查询不需要每次触发 Workflow。
+- **GitHub Actions / GHCR** 承担构建与镜像，**Kubernetes API** 负责业务应用部署，**Temporal** 编排任务；Argo CD / Rollouts 仅保留独立实验或基础设施用途，不参与门户业务发布。P3 普通 CRUD 与 P4 只读查询不需要每次触发 Workflow。
 - DeepSeek 等 LLM 和可选 GitHub Copilot Cloud Agent 在云端，不在 Mac 部署模型。不要把 Agent PR 挂到拥有 Mac 管理权限的 self-hosted Runner。
 
 组件作用与部署位置：
@@ -163,7 +163,7 @@ OrbStack 的 Docker 与 Kubernetes 可能复用容器镜像存储，但**必须�
 
 K8s 中 `TEMPORAL_ADDRESS` 由 Deployment **显式固定**为 `temporal-frontend.temporal.svc.cluster.local:7233`，即使本地 `.env` 里还保留过时的 `127.0.0.1:7233` 也不会把 Pod 指到自己。任何 Secret 更新以后需 `kubectl rollout restart deployment/...` 才生效。
 
-## 6. Argo CD、Rollouts、Traefik、GitOps
+## 6. Argo CD、Rollouts、Traefik（基础设施/历史实验，不参与托管发布）
 
 本项目仍使用现有的官方 Argo/Traefik 配置与 GitOps manifest，依次安装（**只在确认 Kubernetes Context 后执行**）：
 
@@ -256,7 +256,7 @@ kubectl apply -f p4/observability/lab-alert-rule.yaml
 
 ## 9. 维护规则
 
-配置文件中的登录地址、镜像 Tag 仅供单机演示；正式使用应固定镜像 Digest、收敛 Secret 管理和部署版本。Temporal Chart 的 `numHistoryShards` 初始化后**不可随意修改**。所有真实密码只放 Mac 的本地 `.env.*` / K8s Secret，不能写进 GitOps 清单。**唯一的用户操作文档就是本文件**：旧 TEMP 指南仅作重定向。
+配置文件中的登录地址、镜像 Tag 仅供单机演示；正式使用应固定镜像 Digest、收敛 Secret 管理和部署版本。Temporal Chart 的 `numHistoryShards` 初始化后**不可随意修改**。所有真实密码只放 Mac 的本地 `.env.*` / K8s Secret，不能写进 GitOps 清单。基础设施安装参考保留本文件；**当前业务发布的唯一操作文档为 [HOSTED_RELEASE.md](HOSTED_RELEASE.md)**。
 
 官方参考：[OrbStack Kubernetes](https://docs.orbstack.dev/kubernetes/)、[OrbStack Networking](https://docs.orbstack.dev/docker/network)、[Temporal 官方 Helm Chart](https://github.com/temporalio/helm-charts)、[Temporal Worker Deploy](https://docs.temporal.io/develop/typescript/workers)。
 
@@ -302,6 +302,8 @@ pnpm demo:cleanup           # 结果应显示 0 个匹配
 
 应用负责人可在「我管理的应用 → 应用详情 → 设置 → 删除此草稿」删除**唯一初始 DRAFT、从未送审、无需求/访问/运行记录**的应用。托管草稿还会释放仅处于 RESERVED 状态的 TEST/PRODUCTION 端口；一旦提交市场审核或实际部署，后端拒绝直接删除。不同账号无法删除不属于自己的草稿。
 
-## 托管应用真正发布的增量配置（0011）
+## 托管应用发布：单一路径
 
-**这不是重新安装指南。** 新版发布由 [HOSTED_RELEASE.md](HOSTED_RELEASE.md) 说明，需源仓库管理员安装构建 Workflow 模板、更新已有门户与 Worker 的 Kubernetes Secrets、更新 Worker ARM64 镜像，在 `market` 备份后仅执行新的 `0011` 迁移。**后续 P5→P4 TEST 关联另需增量执行 `0012_delivery_release_link`，先在隔离库校验后再迁移已有 market；不要重跑 0000–0011 或重建基础组件。**初次通用发布还需要经 GitHub 人工批准 GitOps PR；验证 Argo 与 LAN NodePort，不能通过 CI 结果代替现场核验。项目的 PostgreSQL/Temporal/Argo/K8s 实例和所有现有卷**不重建、不清空**。
+请按照 [HOSTED_RELEASE.md](HOSTED_RELEASE.md) 更新已有 Portal/Worker，完成源仓库构建模板更新、`0013` 原型发布记录清理、业务 Kubernetes namespace 和 RBAC 一次性初始化；确认旧 Argo **业务** Application 不再自动管理对应环境。**不重装 OrbStack、PostgreSQL、Temporal、Prometheus/Loki 等基础设施，不清空其 PVC。**
+
+以后发布 TEST 不需要 GitOps PR。门户中选择任意分支/Commit、填写版本号和发布说明，Temporal 触发 Actions，Worker 直接部署 Kubernetes，完成健康检查后标记 READY。PRODUCTION 直接选择经过 TEST 的同一个 Digest。
