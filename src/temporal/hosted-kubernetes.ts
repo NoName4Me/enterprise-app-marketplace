@@ -45,25 +45,7 @@ async function kube(method:"GET"|"POST"|"PATCH",path:string,body?:unknown){
     req.end();
   });
 }
-async function oldArgoAbsent(ns:string):Promise<boolean>{
-  const raw=process.env.ARGOCD_SERVER_URL?.trim();
-  const token=process.env.HOSTED_ARGO_APPLICATION_TOKEN?.trim();
-  if(!raw||!token)throw new Error("argo_read_required_for_handoff");
-  const server=new URL(raw);
-  if(server.username||server.password||server.search||server.hash||
-    !(server.protocol==="https:"||(server.protocol==="http:"&&
-      ["localhost","127.0.0.1","argocd-server.argocd.svc.cluster.local"].includes(server.hostname))))
-    throw new Error("invalid_argo_endpoint");
-  const target=new URL(server.toString());
-  target.pathname=target.pathname.replace(/\/$/,"")+"/api/v1/applications/"+ns;
-  const response=await fetch(target,{headers:{Authorization:"Bearer "+token,
-    Accept:"application/json"},redirect:"error",cache:"no-store",
-    signal:AbortSignal.timeout(8000)});
-  if(response.status===404)return true;
-  if(response.status===200)return false;
-  throw new Error("cannot_confirm_argo_relinquished");
-}
-/** A portal-managed release must never race the old Argo application controller. */
+/** Namespace belongs to exactly one portal application and one environment. */
 async function checkScope(input:HostedReleaseInput){
   validate(input);
   const ns=pathFor(input);
@@ -73,7 +55,6 @@ async function checkScope(input:HostedReleaseInput){
   if(labels["marketplace-app-id"]!==input.appId ||
      labels["marketplace-environment-id"]!==input.environmentId)
     throw new Error("namespace_ownership_mismatch");
-  if(!await oldArgoAbsent(ns))throw new Error("argo_application_still_manages_workload");
   return ns;
 }
 function reason(error:unknown){
@@ -81,9 +62,6 @@ function reason(error:unknown){
   const messages:Record<string,string>={
     namespace_not_provisioned:"目标命名空间尚未由管理员完成一次性初始化，不能直接部署",
     namespace_ownership_mismatch:"目标命名空间与应用/环境身份不一致",
-    argo_application_still_manages_workload:"旧 Argo Application 仍控制此业务环境；必须先安全移交管理权",
-    argo_read_required_for_handoff:"未配置 Argo 只读检查，不能排除双控制器争用",
-    cannot_confirm_argo_relinquished:"无法确认旧 Argo 已退出管理，拒绝直接部署",
     in_cluster_kubernetes_required:"Worker 未运行在可授权的 Kubernetes 集群内",
   };
   return messages[code]??"Kubernetes 权限、网络或真实资源状态无法确认；停止并人工核对";

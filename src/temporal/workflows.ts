@@ -85,4 +85,3 @@ export async function deliveryWorkflow(input: DeliveryInput): Promise<DeliverySn
 }
 
 export {hostedReleaseWorkflow,verifiedHostedReleaseWorkflow} from './hosted-workflows';
-export {directHostedReleaseWorkflow,verifiedDirectHostedReleaseWorkflow} from './hosted-direct-workflows';

@@ -11,7 +11,7 @@ import type {HostedReleaseInput,HostedReleaseSnapshot} from "@/temporal/hosted-c
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const VERSION=/^[^\x00-\x1f\x7f]{1,80}$/;
 const DIGEST=/^ghcr\.io\/[a-z0-9][a-z0-9_.-]*(?:\/[a-z0-9][a-z0-9_.-]*)+@sha256:[a-f0-9]{64}$/;
-const running=["REQUESTING","BUILDING","WAITING_PR","DEPLOYING","NEEDS_RECONCILIATION"] as const;
+const running=["REQUESTING","BUILDING","DEPLOYING","NEEDS_RECONCILIATION"] as const;
 function validateId(id:string){if(!UUID.test(id))throw new AppError(404,"not_found");}
 function allowedRepo(repo:string){
   const all=(process.env.HOSTED_ALLOWED_REPOS??"").split(",").map(x=>x.toLowerCase().trim());
@@ -35,9 +35,8 @@ export async function listHostedReleases(actor:Actor|null,appId:string){
     .where(eq(hostedReleases.appId,appId)).orderBy(desc(hostedReleases.createdAt)).limit(30);
   return {releases:rows.map(r=>({
     id:r.id,environment:r.environment,requirementId:r.requirementId,status:r.status,
-    deployDriver:r.deployDriver,
     sourceRef:r.sourceRef,versionLabel:r.versionLabel,releaseNotes:r.releaseNotes,sourceSha:r.sourceSha,
-    buildRunId:r.buildRunId,imageDigest:r.imageDigest,gitopsPrNumber:r.gitopsPrNumber,
+    buildRunId:r.buildRunId,imageDigest:r.imageDigest,
     note:r.note,createdAt:r.createdAt,updatedAt:r.updatedAt
   }))};
 }
@@ -59,7 +58,6 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
     throw new AppError(422,"invalid_release_metadata");
   if(linkage&&sourceRef)throw new AppError(422,"linked_release_source_must_be_derived");
   const selectedRef=typeof sourceRef==="string"?sourceRef:"";
-  const driver=process.env.HOSTED_DEPLOY_DRIVER==="kubernetes"?"KUBERNETES":"GITOPS";
   const user=await authorizeActor(actor,"create");
   validateId(appId);
   if(environment!=="TEST"&&environment!=="PRODUCTION")
@@ -121,7 +119,7 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
       sourceRef:environment==="TEST"?(selectedRef||"default"):prodMeta?.sourceRef,
       versionLabel:environment==="TEST"?String(versionLabel).trim():prodMeta?.versionLabel,
       releaseNotes:environment==="TEST"?String(releaseNotes).trim():prodMeta?.releaseNotes,
-      environment,deployDriver:driver,workflowId,note:"已受理发布请求，等待 Temporal"});
+      environment,workflowId,note:"已受理发布请求，等待 Temporal"});
     const input:HostedReleaseInput={releaseId,appId,environment,environmentId:env.id,
       nodePort:port.nodePort,repository:app.sourceRepository,imageDigest,
       requiredMergeSha:linkage?.requiredMergeSha,sourceRef:environment==="TEST"?(selectedRef||undefined):undefined};
@@ -131,9 +129,7 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
   // Keep the unique release row and demand operator reconciliation, never dispatch twice.
   try{
     await withClient(async client=>{
-      const name=driver==="KUBERNETES"
-        ?(linkage?"verifiedDirectHostedReleaseWorkflow":"directHostedReleaseWorkflow")
-        :(linkage?"verifiedHostedReleaseWorkflow":"hostedReleaseWorkflow");
+      const name=linkage?"verifiedHostedReleaseWorkflow":"hostedReleaseWorkflow";
       await client.start(name,{
         workflowId:current.workflowId,taskQueue:DELIVERY_QUEUE,args:[current.input],
         workflowIdReusePolicy:"REJECT_DUPLICATE",workflowIdConflictPolicy:"FAIL"

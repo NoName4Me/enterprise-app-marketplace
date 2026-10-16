@@ -2872,12 +2872,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "gitops_pr_number": {
-          "name": "gitops_pr_number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
         "note": {
           "name": "note",
           "type": "text",
@@ -2922,13 +2916,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "deploy_driver": {
-          "name": "deploy_driver",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'GITOPS'"
         }
       },
       "indexes": {
@@ -3034,7 +3021,7 @@
         },
         "hosted_releases_status_check": {
           "name": "hosted_releases_status_check",
-          "value": "\"hosted_releases\".\"status\" IN ('REQUESTING','BUILDING','WAITING_PR','DEPLOYING','READY','FAILED','NEEDS_RECONCILIATION')"
+          "value": "\"hosted_releases\".\"status\" IN ('REQUESTING','BUILDING','DEPLOYING','READY','FAILED','NEEDS_RECONCILIATION')"
         }
       },
       "isRLSEnabled": false

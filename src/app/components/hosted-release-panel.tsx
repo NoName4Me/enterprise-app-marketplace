@@ -5,8 +5,7 @@ import {HostedReleaseExecution} from "./hosted-release-execution";
 
 type Release={
   id:string;environment:"TEST"|"PRODUCTION";
-  status:"REQUESTING"|"BUILDING"|"WAITING_PR"|"DEPLOYING"|"READY"|"FAILED"|"NEEDS_RECONCILIATION";
-  deployDriver:"GITOPS"|"KUBERNETES";
+  status:"REQUESTING"|"BUILDING"|"DEPLOYING"|"READY"|"FAILED"|"NEEDS_RECONCILIATION";
   sourceRef:string|null;versionLabel:string|null;releaseNotes:string|null;
   sourceSha:string|null;buildRunId:string|null;
   imageDigest:string|null;gitopsPrNumber:number|null;
@@ -14,7 +13,7 @@ type Release={
 };
 const labels={
   REQUESTING:"任务已提交",BUILDING:"正在构建镜像",
-  WAITING_PR:"等待发布审核",DEPLOYING:"正在部署与验证",
+DEPLOYING:"正在部署与验证",
   READY:"已通过部署验证",FAILED:"部署未完成",NEEDS_RECONCILIATION:"需要人工核对"
 };
 const active=(status:Release["status"])=>["REQUESTING","BUILDING","WAITING_PR","DEPLOYING"].includes(status);
@@ -89,7 +88,7 @@ export function HostedReleasePanel({root,repo,productionDigest}:{
   }
   return <section className="card hosted-release-panel">
     <div className="section-title"><h3>应用交付</h3><span className="tag">Temporal + GitHub Actions + Kubernetes</span></div>
-    <p className="muted">门户统一构建和部署；Kubernetes 直发模式无需 GitOps PR。生产只复用已验证的 TEST 镜像。</p>
+    <p className="muted">门户统一构建和部署；无需向门户代码仓库创建部署 PR。生产只复用已验证的 TEST 镜像。</p>
     <div className="release-action-grid">
       <div className="release-action">
         <strong>1. 构建并部署测试</strong>
@@ -118,11 +117,11 @@ export function HostedReleasePanel({root,repo,productionDigest}:{
         {tested.length>0&&<label>选择已验证版本
           <select value={candidate?.id??""} onChange={e=>setSelectedTestId(e.target.value)}>
             {tested.map(r=><option key={r.id} value={r.id}>
-              {r.versionLabel??"早期版本"} · {r.releaseNotes?.slice(0,52)??"无说明"} · {new Date(r.createdAt).toLocaleString("zh-CN")}
+              {r.versionLabel??"未命名版本"} · {r.releaseNotes?.slice(0,52)??"无说明"} · {new Date(r.createdAt).toLocaleString("zh-CN")}
             </option>)}
           </select>
         </label>}
-        {candidate&&<p className="muted">当前选择：<strong>{candidate.versionLabel??"早期版本"}</strong><br/>{candidate.releaseNotes??"历史发布未填写说明"}</p>}
+        {candidate&&<p className="muted">当前选择：<strong>{candidate.versionLabel??"未命名版本"}</strong><br/>{candidate.releaseNotes??"历史发布未填写说明"}</p>}
         <button type="button" disabled={busy||activeProd||!candidate?.imageDigest||
           candidate.imageDigest===productionDigest}
           onClick={()=>void trigger("PRODUCTION")}>
@@ -137,7 +136,7 @@ export function HostedReleasePanel({root,repo,productionDigest}:{
     {loading&&<p className="muted">读取中…</p>}
     {!loading&&!rows.length&&<p className="muted">暂无发布记录。首次使用需让仓库管理员完成标准 GitHub Actions 构建模板接入。</p>}
     <div className="hosted-release-history">{rows.map(r=><article key={r.id} className="workbench-item">
-      <div><strong>{r.versionLabel??"早期版本"} · {r.environment==="TEST"?"测试环境":"生产环境"} · {labels[r.status]}</strong>
+      <div><strong>{r.versionLabel??"未命名版本"} · {r.environment==="TEST"?"测试环境":"生产环境"} · {labels[r.status]}</strong>
         {r.releaseNotes&&<p className="pre-wrap">{r.releaseNotes}</p>}
         <p className="muted">源码：{r.sourceRef??"未记录"} · {r.sourceSha?.slice(0,12)??"未确认 SHA"}</p>
         <p className="muted">{r.note||"等待任务反馈"}</p>
@@ -145,8 +144,6 @@ export function HostedReleasePanel({root,repo,productionDigest}:{
         <div className="actions">
           {r.buildRunId&&<a target="_blank" rel="noopener noreferrer"
             href={"https://github.com/"+repo+"/actions/runs/"+r.buildRunId}>构建详情 →</a>}
-          {r.deployDriver==="GITOPS"&&r.gitopsPrNumber&&<a target="_blank" rel="noopener noreferrer"
-            href={"https://github.com/NoName4Me/enterprise-app-marketplace/pull/"+r.gitopsPrNumber}>审核发布 PR →</a>}
         </div>
         <HostedReleaseExecution root={root} release={r}/>
       </div>
