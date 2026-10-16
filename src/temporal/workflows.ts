@@ -79,7 +79,7 @@ export async function deliveryWorkflow(input: DeliveryInput): Promise<DeliverySn
     const result=await verifyMergedPullRequest(input.repository,number,input.requirementId);
     if(result.verified&&result.mergeSha)return {...state,stage:"AWAITING_TEST_RELEASE",reviewedPrUrl:result.url,
       reviewedMergeSha:result.mergeSha,
-      note:result.note+"；等待下阶段 GitOps/Argo 验收。"};
+      note:result.note+"；等待后续 Kubernetes TEST 验证。"};
     state={...state,stage:"AWAITING_PR_REVIEW",note:result.note};
   }
 }

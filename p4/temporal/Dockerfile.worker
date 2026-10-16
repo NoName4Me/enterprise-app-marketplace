@@ -9,7 +9,6 @@ COPY tsconfig.json ./
 COPY src/temporal/ ./src/temporal/
 COPY src/domain/cloud-llm.ts ./src/domain/cloud-llm.ts
 COPY src/db/ ./src/db/
-COPY scripts/p4-hosted-manifest.mjs ./scripts/p4-hosted-manifest.mjs
 ENV NODE_ENV=production
 USER node
 CMD ["pnpm", "temporal:worker"]
