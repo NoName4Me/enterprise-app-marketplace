@@ -11,13 +11,13 @@ function field(value: unknown, min: number, max: number, key: string) {
     throw new AppError(422, "invalid_" + key);
   return value.trim();
 }
-function githubUrl(value: unknown, kind: "issues" | "pull") {
+function githubPrUrl(value: unknown) {
   if (value === "" || value === null || value === undefined) return null;
   if (typeof value !== "string" || value.length > 400) throw new AppError(422, "invalid_link");
   try {
     const url = new URL(value);
     if (url.protocol !== "https:" || url.hostname !== "github.com" || url.port ||
-        !new RegExp("^/[A-Za-z0-9-]+/[A-Za-z0-9_.-]+/" + kind + "/[1-9][0-9]*$").test(url.pathname) ||
+        !new RegExp("^/[A-Za-z0-9-]+/[A-Za-z0-9_.-]+/" + "pull" + "/[1-9][0-9]*$").test(url.pathname) ||
         url.search || url.hash || url.username || url.password) throw new Error("bad_url");
     return url.href;
   } catch { throw new AppError(422, "invalid_link"); }
@@ -108,7 +108,7 @@ export async function commentRequirement(actor: Actor | null, requirementId: str
 }
 export async function updateRequirement(actor: Actor | null, requirementId: string, body: Record<string, unknown>) {
   const current = await authorizeActor(actor, "active");
-  if (Object.keys(body).some(key => !["status","githubIssueUrl","githubPrUrl","resolution"].includes(key)))
+  if (Object.keys(body).some(key => !["status","githubPrUrl","resolution"].includes(key)))
     throw new AppError(422, "unknown_field");
   const status = body.status;
   if (status !== "OPEN" && status !== "IN_PROGRESS" && status !== "DONE" && status !== "REJECTED")
@@ -127,8 +127,7 @@ export async function updateRequirement(actor: Actor | null, requirementId: stri
     } else if (!current.role?.split(",").includes("admin")) throw new AppError(403, "forbidden");
     const [updated] = await tx.update(requirements).set({
       status, assignedTo: status === "IN_PROGRESS" || status === "DONE" ? current.id : null,
-      githubIssueUrl: githubUrl(body.githubIssueUrl, "issues"),
-      githubPrUrl: githubUrl(body.githubPrUrl, "pull"), resolution, updatedAt: new Date(),
+      githubPrUrl: githubPrUrl(body.githubPrUrl), resolution, updatedAt: new Date(),
     }).where(eq(requirements.id, row.id)).returning({ id: requirements.id, status: requirements.status });
     return updated;
   });

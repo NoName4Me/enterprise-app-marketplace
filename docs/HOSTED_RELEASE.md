@@ -45,6 +45,14 @@ kubectl get svc -A -o wide
 - 同环境一次只允许一条未决发布；升级过程中保留旧 READY 的镜像和访问入口，直到新镜像验证成功。
 - 目前自动 HTTP 检查从**Worker 所在网络**发起；它不能代替从员工的 LAN 客户端测试。发布在真实 Mac mini 上仍需验证 OrbStack NodePort 映射及入站防火墙。
 
+## P5 需求交付 → P4 TEST 的受控衔接
+
+- 在需求详情启动 P5 Temporal 任务，负责人审核实施方案；Coding Agent 的 PR 合并至源仓库 `dev` 后，由平台验证 PR 的 `Portal-Requirement-ID`、合并 SHA 和该 SHA 的 GitHub Checks。仅核验成功会显示「部署此需求到 TEST」。
+- **源仓库管理员必须人工将包含该提交的 `dev` 历史晋级到 `master`，并通过该仓库 `master` 的完整 push CI。** 平台不会合并 PR、修改分支或绕过审核。源仓库若将 dev squash/cherry-pick 到 master，Git 祖先关系丢失，平台将拒绝此次自动衔接；可走独立 P4 测试发布并人工核对，不伪造需求关联证明。
+- 点击需求页「部署此需求到 TEST」后，后端重查当前 owner、唯一受信仓库、Temporal 已验证的 PR SHA；仅通过服务端参数创建带 `requirement_id` 的发布账本。Worker 在任何远端构建 POST 之前，对 GitHub 当前 `master` HEAD 做 compare 祖先核验。构建模板还会要求该 HEAD 的成功完整 CI 与原 SHA 一致，镜像始终按不可变 Digest 经独立 GitOps PR 审核部署。
+- 需求页显示同一需求关联的 TEST 发布记录和 GitOps 审核链接。发布进入 READY 后也**不自动生产晋级**。P5 已在旧版运行并缺少已核验合并 SHA 的历史任务不得自动升级到此流程，需从应用发布页手工操作。
+- 本改动需要在**现有 market 备份与隔离库校验通过后**仅增量执行 `0012_delivery_release_link`；不要重建 PostgreSQL、Temporal、Argo 或任何现有卷。**先升级 Temporal Activity Worker 并确认 Ready，再升级 Portal**。需求 TEST 发布使用新版 `verifiedHostedReleaseWorkflow`；旧 Worker 不认识该类型时只能等待，不能作为旧版无祖先校验的发布任务运行。仍需谨慎处理尚在运行的老版本工作流历史。
+
 ## 尚未完成与验收状态
 
 **2026-10-16 已在 Mac mini 完成首个真实托管仓库的 TEST 链路**：门户 → Temporal → master 完整 CI 校验 → 手动 Actions/GHCR ARM64 → 人工合并 GitOps PR → Argo Synced/Healthy → 实际 Deployment Digest 与就绪副本 → Service NodePort → Worker、Mac 与 Chrome 访问 → 账本 READY；Chrome 的任务新增与完成也已验证。兼容性修复与执行证据记录在 PR #27/#28，不把此次单实例测试视为生产验收。
@@ -68,3 +76,5 @@ kubectl get svc -A -o wide
 - 只需更新既有 Portal 镜像及其受限 Secret；**不需要新增数据库迁移、重装 Kubernetes/Temporal/Argo、清理卷**。升级前检查实际部署与 PR #29 的相容性。
 - 实机待验证：私有/公开仓库日志读取、构建步骤刷新、日志上限与权限拒绝、源仓库网络代理、Mac mini 现有发布流程及 GitOps 审核。
 - 此轮没有启用自动审核 GitOps PR，也没有实现自动为任意仓库写入 CI 模板。测试发布自动审批应另设受约束策略，而不是取消现有 GitOps 来源校验。
+
+> 需求、审批、讨论、状态和结果以门户需求中心为准；GitHub 仅作为代码/PR 及当前 Actions 构建端，不要求创建 GitHub Issue。

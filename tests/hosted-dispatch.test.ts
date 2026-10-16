@@ -30,6 +30,33 @@ describe("hosted build dispatch outcome",()=>{
     expect(fetch).toHaveBeenCalledTimes(4);
     expect(fetch.mock.calls.filter(call=>call[1].method==="POST")).toHaveLength(1);
   });
+  it("refuses a P5 handoff not contained in master before any workflow dispatch",async()=>{
+    const linked={...input,requiredMergeSha:"b".repeat(40)};
+    const fetch=vi.fn().mockResolvedValueOnce(Response.json({default_branch:"master"}))
+      .mockResolvedValueOnce(Response.json({commit:{sha:"a".repeat(40)}}))
+      .mockResolvedValueOnce(Response.json({base_commit:{sha:"b".repeat(40)},
+        status:"diverged",ahead_by:1,behind_by:1}));
+    vi.stubGlobal("fetch",fetch);
+    const result=await dispatchHostedBuild(linked);
+    expect(result.kind).toBe("REJECTED");
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch.mock.calls.every(call=>call[1].method!=="POST")).toBe(true);
+  });
+  it("dispatches P5-origin builds only after verifying master contains the approved merge",async()=>{
+    const linked={...input,requiredMergeSha:"b".repeat(40)};
+    const fetch=vi.fn().mockResolvedValueOnce(Response.json({default_branch:"master"}))
+      .mockResolvedValueOnce(Response.json({commit:{sha:"a".repeat(40)}}))
+      .mockResolvedValueOnce(Response.json({base_commit:{sha:"b".repeat(40)},
+        status:"ahead",ahead_by:2,behind_by:0}))
+      .mockResolvedValueOnce(Response.json({id:2}))
+      .mockResolvedValueOnce(Response.json({workflow_run_id:1234}));
+    vi.stubGlobal("fetch",fetch);
+    const result=await dispatchHostedBuild(linked);
+    expect(result).toEqual({kind:"ACCEPTED",id:"1234",sourceSha:"a".repeat(40)});
+    expect(fetch.mock.calls.filter(call=>call[1].method==="POST")).toHaveLength(1);
+    const request=JSON.parse(fetch.mock.calls[4][1].body);
+    expect(request.inputs.source_sha).toBe("a".repeat(40));
+  });
   it("sends the Application itself as the Argo REST request body",async()=>{
     vi.stubEnv("ARGOCD_SERVER_URL","http://argocd-server.argocd.svc.cluster.local");
     vi.stubEnv("HOSTED_ARGO_APPLICATION_TOKEN","test-only");
