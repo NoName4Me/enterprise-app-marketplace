@@ -71,8 +71,12 @@ async function jobsFor(repo:string,runId:string|null):Promise<ReadResult>{
 }
 export async function getHostedExecution(actor:Actor|null,appId:string,releaseId:string){
   const {release,snapshot,repo}=await context(actor,appId,releaseId);
-  const [build,argo]=await Promise.all([jobsFor(repo,release.buildRunId),
-    getArgoOverview(actor,appId)]);
+  const build=await jobsFor(repo,release.buildRunId);
+  if(release.deployDriver==="KUBERNETES")return {
+    release,snapshot,build,deployment:{source:"Kubernetes API",state:"NOT_CONNECTED",applications:[]},
+    observedAt:new Date().toISOString()
+  };
+  const argo=await getArgoOverview(actor,appId);
   const deployed=argo.applications.filter(item=>item.environmentKey.toLowerCase()===release.environment.toLowerCase());
   return {release,snapshot,build,deployment:{source:argo.source,state:argo.state,applications:deployed},
     observedAt:new Date().toISOString()};
