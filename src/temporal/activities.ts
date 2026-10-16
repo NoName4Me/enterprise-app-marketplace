@@ -78,7 +78,7 @@ Promise<{kind:"RUNNING"|"DONE"|"FAILED";note:string}> {
 }
 
 export async function verifyMergedPullRequest(repository: string, number: number, requirementId: string):
-Promise<{verified:boolean;note:string;url?:string}> {
+Promise<{verified:boolean;note:string;url?:string;mergeSha?:string}> {
   if (!Number.isSafeInteger(number) || number < 1 || number > 1_000_000_000)
     return {verified:false,note:"无效 PR 编号。"};
   const headers=gitHeaders();
@@ -108,6 +108,6 @@ Promise<{verified:boolean;note:string;url?:string}> {
       return {verified:false,note:"CI 检查未全部通过或存在未读取的分页。"};
     const url=typeof pr.html_url==="string"&&pr.html_url.startsWith("https://github.com/")
       ?pr.html_url.slice(0,400):undefined;
-    return {verified:true,note:"PR 已合并到 dev，合并 SHA 的全部 GitHub Checks 为成功；尚未部署。",url};
+    return {verified:true,note:"PR 已合并到 dev，合并 SHA 的全部 GitHub Checks 为成功；尚未部署。",url,mergeSha:sha};
   } catch {return {verified:false,note:"GitHub 请求失败；不能认为 PR 或 CI 已验证。"};}
 }
