@@ -91,7 +91,7 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
       eq(appEnvironments.appId,appId),eq(appEnvironments.purpose,environment))).limit(1);
     if(!port||!env)throw new AppError(409,"hosted_environment_missing");
     let imageDigest:string|undefined;
-    let prodMeta:{versionLabel:string|null;releaseNotes:string|null;sourceRef:string|null}|undefined;
+    let prodMeta:{versionLabel:string|null;releaseNotes:string|null;sourceRef:string|null;sourceSha:string|null}|undefined;
     if(environment==="PRODUCTION"){
       // A selected historical TEST release also supports safe rollback.
       // Never accept a client-supplied digest or branch name.
@@ -100,7 +100,7 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
         throw new AppError(422,"invalid_tested_release");
       const ready=await tx.select({
         id:hostedReleases.id,digest:hostedReleases.imageDigest,
-        versionLabel:hostedReleases.versionLabel,releaseNotes:hostedReleases.releaseNotes,sourceRef:hostedReleases.sourceRef,
+        versionLabel:hostedReleases.versionLabel,releaseNotes:hostedReleases.releaseNotes,sourceRef:hostedReleases.sourceRef,sourceSha:hostedReleases.sourceSha,
       }).from(hostedReleases).where(and(
         eq(hostedReleases.appId,appId),
         eq(hostedReleases.environment,"TEST"),eq(hostedReleases.status,"READY")
@@ -109,7 +109,7 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
       if(!chosen||!chosen.digest||!DIGEST.test(chosen.digest))
         throw new AppError(409,"test_release_not_verified");
       imageDigest=chosen.digest;
-      prodMeta={versionLabel:chosen.versionLabel,releaseNotes:chosen.releaseNotes,sourceRef:chosen.sourceRef};
+      prodMeta={versionLabel:chosen.versionLabel,releaseNotes:chosen.releaseNotes,sourceRef:chosen.sourceRef,sourceSha:chosen.sourceSha};
       if(port.state==="READY"&&port.imageDigest===imageDigest)
         throw new AppError(409,"production_already_on_tested_version");
     }
@@ -122,6 +122,7 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
       environment,workflowId,note:"已受理发布请求，等待 Temporal"});
     const input:HostedReleaseInput={releaseId,appId,environment,environmentId:env.id,
       nodePort:port.nodePort,repository:app.sourceRepository,imageDigest,
+      sourceSha:environment==="PRODUCTION"?prodMeta?.sourceSha??undefined:undefined,
       requiredMergeSha:linkage?.requiredMergeSha,sourceRef:environment==="TEST"?(selectedRef||undefined):undefined};
     return {input,workflowId};
   });
