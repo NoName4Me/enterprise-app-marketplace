@@ -40,6 +40,11 @@ export function HostedRuntimePanel({root}:{root:string}){
     void load();
     return()=>controller.abort();
   },[root,environment,revision]);
+  // Keep the selected environment current while the operator watches a rollout.
+  useEffect(()=>{
+    const timer=setInterval(()=>{if(!document.hidden)setRevision(x=>x+1);},30000);
+    return()=>clearInterval(timer);
+  },[]);
   function selectEnvironment(next:HostedEnvironment){
     if(next===environment)return;
     setData(null);setBusy(true);setError("");setEnvironment(next);
