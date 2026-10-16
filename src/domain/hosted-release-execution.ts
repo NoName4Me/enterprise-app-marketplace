@@ -90,7 +90,7 @@ async function boundedText(response:Response){
       const {done,value}=await reader.read();
       if(done)break;
       bytes+=value.length;
-      if(bytes>MAX_LOG_BYTES)throw new AppError(413,"log_too_large");
+      if(bytes>MAX_LOG_BYTES)throw new AppError(422,"log_too_large");
       text+=decoder.decode(value,{stream:true});
     }
     return text+decoder.decode();
