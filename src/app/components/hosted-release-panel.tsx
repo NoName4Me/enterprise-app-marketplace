@@ -1,6 +1,7 @@
 "use client";
 import {useCallback,useEffect,useRef,useState} from "react";
 import {useRouter} from "next/navigation";
+import {HostedReleaseExecution} from "./hosted-release-execution";
 
 type Release={
   id:string;environment:"TEST"|"PRODUCTION";
@@ -123,6 +124,7 @@ export function HostedReleasePanel({root,repo,productionDigest}:{
           {r.gitopsPrNumber&&<a target="_blank" rel="noopener noreferrer"
             href={"https://github.com/NoName4Me/enterprise-app-marketplace/pull/"+r.gitopsPrNumber}>审核发布 PR →</a>}
         </div>
+        <HostedReleaseExecution root={root} release={r}/>
       </div>
       <span className="tag">{r.status}</span>
     </article>)}</div>
