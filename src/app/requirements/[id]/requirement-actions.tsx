@@ -2,13 +2,13 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 type Props = { requirementId: string; canManage: boolean; initial: {
-  status: "OPEN"|"IN_PROGRESS"|"DONE"|"REJECTED"; githubIssueUrl: string|null;
+  status: "OPEN"|"IN_PROGRESS"|"DONE"|"REJECTED";
   githubPrUrl: string|null; resolution: string|null;
 }};
 export function RequirementActions({requirementId,canManage,initial}:Props) {
   const router=useRouter();
   const [comment,setComment]=useState(""),[status,setStatus]=useState(initial.status);
-  const [issue,setIssue]=useState(initial.githubIssueUrl??""),[pr,setPr]=useState(initial.githubPrUrl??"");
+  const [pr,setPr]=useState(initial.githubPrUrl??"");
   const [resolution,setResolution]=useState(initial.resolution??"");
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState("");
   async function save(path:string, body:Record<string,unknown>, method:"POST"|"PATCH") {
@@ -21,19 +21,18 @@ export function RequirementActions({requirementId,canManage,initial}:Props) {
     finally{setBusy(false)}
   }
   async function postComment(e:FormEvent){e.preventDefault();if(await save("/comments",{body:comment},"POST"))setComment("");}
-  async function update(e:FormEvent){e.preventDefault();await save("",{status,githubIssueUrl:issue,githubPrUrl:pr,resolution},"PATCH");}
+  async function update(e:FormEvent){e.preventDefault();await save("",{status,githubPrUrl:pr,resolution},"PATCH");}
   return <div className="stack">
     <section className="card"><h3>讨论</h3><form onSubmit={e=>void postComment(e)} className="stack">
       <label>留言<textarea required minLength={1} maxLength={2000} value={comment} onChange={e=>setComment(e.target.value)} /></label>
       <button disabled={busy || !comment.trim()}>发表评论</button>
     </form></section>
-    {canManage && <section className="card"><h3>维护者处理</h3><p className="muted">状态和交付链接是人工登记，不代表 CI/生产部署已验证。</p>
+    {canManage && <section className="card"><h3>维护者处理</h3><p className="muted">需求在门户内部处理；可关联代码 PR 用于追溯。人工登记的交付链接不代表 CI/部署已验证。</p>
       <form className="stack" onSubmit={e=>void update(e)}>
         <label>状态<select value={status} onChange={e=>setStatus(e.target.value as Props["initial"]["status"])}>
           <option value="OPEN">待处理</option><option value="IN_PROGRESS">处理中</option>
           <option value="DONE">已完成</option><option value="REJECTED">不采纳</option>
         </select></label>
-        <label>GitHub Issue URL<input type="url" value={issue} onChange={e=>setIssue(e.target.value)} placeholder="https://github.com/org/repo/issues/1" /></label>
         <label>GitHub PR URL<input type="url" value={pr} onChange={e=>setPr(e.target.value)} placeholder="https://github.com/org/repo/pull/1" /></label>
         <label>处理结论<textarea maxLength={2000} value={resolution} onChange={e=>setResolution(e.target.value)} /></label>
         <button disabled={busy}>更新进度</button>
