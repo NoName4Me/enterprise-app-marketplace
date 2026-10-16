@@ -77,7 +77,8 @@ export async function deliveryWorkflow(input: DeliveryInput): Promise<DeliverySn
     prNumber=null;
     state={...state,stage:"VERIFYING_PR",note:"正在调用 GitHub 核对 PR 与 CI…"};
     const result=await verifyMergedPullRequest(input.repository,number,input.requirementId);
-    if(result.verified)return {...state,stage:"AWAITING_TEST_RELEASE",reviewedPrUrl:result.url,
+    if(result.verified&&result.mergeSha)return {...state,stage:"AWAITING_TEST_RELEASE",reviewedPrUrl:result.url,
+      reviewedMergeSha:result.mergeSha,
       note:result.note+"；等待下阶段 GitOps/Argo 验收。"};
     state={...state,stage:"AWAITING_PR_REVIEW",note:result.note};
   }
