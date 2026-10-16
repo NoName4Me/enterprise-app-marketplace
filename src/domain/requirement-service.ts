@@ -30,7 +30,7 @@ async function rowOf(requirementId: string) {
   const [row] = await db.select({
     id: requirements.id, appId: requirements.appId, createdBy: requirements.createdBy,
     type: requirements.type, title: requirements.title, description: requirements.description,
-    status: requirements.status, assignedTo: requirements.assignedTo, githubIssueUrl: requirements.githubIssueUrl,
+    status: requirements.status, assignedTo: requirements.assignedTo,
     githubPrUrl: requirements.githubPrUrl, resolution: requirements.resolution,
     createdAt: requirements.createdAt, updatedAt: requirements.updatedAt,
     appListed: applications.listingStatus, ownerId: applications.ownerUserId,

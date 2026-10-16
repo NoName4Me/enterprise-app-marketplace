@@ -39,37 +39,7 @@ jobs:
           [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test -f Dockerfile
-      - name: Require successful master CI before manual publication
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_SHA: ${{ inputs.source_sha }}
-          REPO: ${{ github.repository }}
-          REF: ${{ github.ref }}
-        run: |
-          set -euo pipefail
-          test "$REF" = refs/heads/master
-          node - <<'NODE'
-          const headers={Authorization:'Bearer '+process.env.GITHUB_TOKEN,
-            Accept:'application/vnd.github+json'};
-          const base='https://api.github.com/repos/'+process.env.REPO;
-          async function get(path){
-            const r=await fetch(base+path,{headers});
-            if(!r.ok)throw new Error('CI verification failed: '+r.status);
-            return r.json();
-          }
-          async function main(){
-            const head=await get('/branches/master');
-            if(head.commit.sha!==process.env.SOURCE_SHA)throw new Error('Source must be current master HEAD');
-            const result=await get('/actions/workflows/ci.yml/runs?event=push&branch=master&head_sha='+process.env.SOURCE_SHA+'&per_page=100');
-            const run=result.workflow_runs.find(x=>x.head_sha===process.env.SOURCE_SHA&&
-              x.event==='push'&&x.status==='completed'&&x.conclusion==='success'&&
-              x.path==='.github/workflows/ci.yml');
-            if(!run)throw new Error('Current master has no successful full ci.yml run');
-            console.log('Verified master CI run '+run.id);
-          }
-          main().catch(e=>{console.error(e.message);process.exitCode=1});
-          NODE
-      - name: Prepare lowercase GHCR coordinates
+      # TEST may build any commit in the registered repository. The workflow checks out source_sha\n      # exactly and performs the build + smoke test before emitting a trusted digest.\n      - name: Prepare lowercase GHCR coordinates
         id: meta
         env:
           REPO: ${{ github.repository }}

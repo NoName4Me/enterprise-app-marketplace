@@ -9,7 +9,7 @@
 - `HOSTED` GitHub 托管应用：仓库、名称、简介。平台事务性建立 web 组件、固定 TEST/PRODUCTION 环境、绑定 GitHub 引用，预留两组 NodePort。用户不填组件/环境/端口。
 - **用户访问方式（单台 Mac mini 实验）**：固定 LAN IP + 每环境独立端口（保留范围 `31000–31999`），不是同一个 IP:Port 下的不同路径，防止前端静态资源、路由和 Cookie 冲突。主机 IP 仅由服务器管理员通过 `HOSTED_PUBLIC_IP` 配置；**只有实际测试过访问成功的 READY 部署才显示 URL**，端口预留不等于服务在运行。
 - **生产晋级规则**：同一已通过测试的 GHCR 镜像 Digest → 生产，生产不能直接使用重新构建的未知镜像；生产环境由平台管理，实际发布与回滚须接入受控 Temporal/Argo 流程。
-- 托管发布已通过 Temporal 串接标准 Actions/GHCR、人工审核 GitOps PR、Argo 与独立 NodePort，2026-10-16 完成首个真实仓库 TEST 验证。需管理员先配置标准 Workflow 和受限凭据；生产晋级/历史版本回退仍待实机验收，**不能在没有实际生产访问地址前上架市场**。
+- 之前的 GitOps TEST 实机成功只证明构建/容器基础链路。当前托管发布由 Temporal 串接 Actions/GHCR、直接更新 Kubernetes Deployment/Service 和独立 NodePort；TEST 可选任意分支/Commit、版本号与发布说明。生产仅复用已验收 TEST Digest，直发模式仍待 Mac mini 实机验证，**不能在没有实际生产访问地址前上架市场**。
 
 AI 运维界面应以应用健康、活动告警、近期事件、依据和受控修复建议为主。现有 Prometheus/Loki 证据采集目前仍绑定单个实验命名空间；没有关联证据显示 UNKNOWN，不得把实验数据冒充其它应用的真实健康数据。未来按应用/环境生成采集标签与告警关联，Temporal 保留流程审计。
 
@@ -120,9 +120,9 @@ AI 运维界面应以应用健康、活动告警、近期事件、依据和受�
 每完成一个主要业务批次，只做一次简短评估：员工是否完成任务；流程还需跳到哪里；数据是否来自真实系统；哪些步骤值得由 AI 辅助；实现/维护成本是否划算。将缺口分为“阻塞主流程 / 下阶段有价值 / 暂缓”。不要为每轮生成多份报告，证据与改进建议优先记录在门户需求与发布记录；代码变更可关联 PR。
 
 建议关注三个平台自身指标：**员工需求得到解决的比例、有效需求从提交到可用结果的时长、定位应用负责人/最近变更/故障依据的耗时**。这些是门户流程指标，不涉及目标业务应用经营数据。
-## P4 当前实现状态（2026-10-14）
+## P4 当前目标（原型单一路径）
 
-门户不变，AI DevOps 仅位于应用私有维护页。dev 已编码：受控 GitHub Actions/GHCR Digest → GitOps PR → OrbStack Kubernetes 的 Argo CD/Argo Rollouts 蓝绿策略、Argo 同步与健康只读、Prometheus/Loki 证据、Ollama 只读诊断。实验 Mac 配置与真实 CI/切流/回滚尚未验收，详见 TEMP_P4_MAC_SETUP.md。现有 P3 需求中心暂停。无需自建 Code RAG 或金丝雀发布引擎。
+平台是唯一操作入口。用户在应用发布页选 Git 分支/Commit，输入版本号和说明，经 GitHub Actions/GHCR 构建，在 Mac mini Kubernetes 直接部署，Portal 展示构建步骤、日志、容器与 HTTP 验证并持久记录结果。PRODUCTION 从 TEST READY 版本中选择，不再次构建。**业务应用部署不产生平台仓库 GitOps PR；GitHub Issues 不承担需求管理。** 旧版 GitOps 实验不属于正式发布链。
 
 ## 2026-10-15 草稿回收与测试数据治理
 

@@ -1,93 +1,83 @@
-import { defineQuery, proxyActivities, setHandler, sleep } from "@temporalio/workflow";
+import {defineQuery,proxyActivities,setHandler,sleep} from "@temporalio/workflow";
 import type * as hosted from "./hosted-activities";
+import type * as kube from "./hosted-kubernetes";
 import type {HostedReleaseInput,HostedReleaseSnapshot} from "./hosted-contracts";
 
-export const hostedReleaseStatus=defineQuery<HostedReleaseSnapshot>("hostedReleaseStatus");
-// Never retry a remote POST of unknown outcome. DB status updates are idempotent.
-const {dispatchHostedBuild,openHostedGitopsPr,registerHostedArgoApp}=proxyActivities<
-  Pick<typeof hosted,"dispatchHostedBuild"|"openHostedGitopsPr"|"registerHostedArgoApp">
->({startToCloseTimeout:"90 seconds",retry:{maximumAttempts:1}});
-const {pollHostedBuild,checkGitopsPr,probeHostedArgo}=proxyActivities<
-  Pick<typeof hosted,"pollHostedBuild"|"checkGitopsPr"|"probeHostedArgo">
->({startToCloseTimeout:"30 seconds",retry:{maximumAttempts:2}});
+// Single HOSTED release workflow: build immutable digest, deploy with Kubernetes, verify.
+const statusQuery=defineQuery<HostedReleaseSnapshot>("hostedReleaseStatus");
+const {dispatchHostedBuild}=proxyActivities<Pick<typeof hosted,"dispatchHostedBuild">>({
+  startToCloseTimeout:"90 seconds",retry:{maximumAttempts:1}
+});
+const {pollHostedBuild}=proxyActivities<Pick<typeof hosted,"pollHostedBuild">>({
+  startToCloseTimeout:"30 seconds",retry:{maximumAttempts:2}
+});
 const {recordHostedRelease}=proxyActivities<Pick<typeof hosted,"recordHostedRelease">>({
   startToCloseTimeout:"15 seconds",retry:{maximumAttempts:5}
 });
-
-/** Versioned task type: an older worker must not run a linked release without the ancestry gate. */
-export async function verifiedHostedReleaseWorkflow(input:HostedReleaseInput):Promise<HostedReleaseSnapshot>{
+const {preflightHostedKube,applyHostedKube}=proxyActivities<
+  Pick<typeof kube,"preflightHostedKube"|"applyHostedKube">>({
+  startToCloseTimeout:"90 seconds",retry:{maximumAttempts:1}
+});
+const {probeHostedKube}=proxyActivities<Pick<typeof kube,"probeHostedKube">>({
+  startToCloseTimeout:"30 seconds",retry:{maximumAttempts:2}
+});
+export async function verifiedHostedReleaseWorkflow(input:HostedReleaseInput){
   if(input.environment!=="TEST"||!/^[a-f0-9]{40}$/.test(input.requiredMergeSha??""))
     throw new Error("verified_handoff_required");
   return hostedReleaseWorkflow(input);
 }
-
 export async function hostedReleaseWorkflow(input:HostedReleaseInput):Promise<HostedReleaseSnapshot>{
-  let state:HostedReleaseSnapshot={releaseId:input.releaseId,stage:"QUEUED",note:"等待持久任务",
-    sourceSha:null,buildRunId:null,imageDigest:input.imageDigest??null,
-    gitopsPrNumber:null,testedAt:null};
-  setHandler(hostedReleaseStatus,()=>state);
+  let state:HostedReleaseSnapshot={releaseId:input.releaseId,stage:"QUEUED",
+    note:"等待 Kubernetes 发布",sourceSha:input.sourceSha??null,buildRunId:null,
+    imageDigest:input.imageDigest??null,testedAt:null};
+  setHandler(statusQuery,()=>state);
   async function move(stage:HostedReleaseSnapshot["stage"],note:string){
-    state={...state,stage,note};
-    await recordHostedRelease(state);
+    state={...state,stage,note};await recordHostedRelease(state);
   }
   try{
+    // Verify the application namespace is initialized and belongs to this environment.
+    const preflight=await preflightHostedKube(input);
+    if(preflight.kind!=="ACCEPTED"){
+      await move("FAILED",preflight.reason);return state;
+    }
     if(input.environment==="TEST"){
-      await move("BUILDING","请求源仓库的受控 GitHub Actions 构建");
-      const result=await dispatchHostedBuild(input);
-      if(result.kind!=="ACCEPTED"){
-        await move(result.kind==="UNKNOWN"?"NEEDS_RECONCILIATION":"FAILED",result.reason);
+      await move("BUILDING","获取源码并请求 GitHub Actions 构建");
+      const build=await dispatchHostedBuild(input);
+      if(build.kind!=="ACCEPTED"){
+        await move(build.kind==="UNKNOWN"?"NEEDS_RECONCILIATION":"FAILED",build.reason);
         return state;
       }
-      state={...state,sourceSha:result.sourceSha!,buildRunId:result.id};
-      await move("WAITING_BUILD","GitHub Actions 正在构建并发布不可变 GHCR 镜像");
-      let ready=false;
-      for(let i=0;i<120;i++){
-        await sleep("1 minute");
-        const progress=await pollHostedBuild(input,result.id,result.sourceSha!);
-        if(progress.kind==="FAILED"){await move("FAILED",progress.reason);return state;}
-        if(progress.kind==="READY"){
-          state={...state,imageDigest:progress.imageDigest};
-          ready=true;break;
-        }
+      state={...state,sourceSha:build.sourceSha!,buildRunId:build.id};
+      await move("WAITING_BUILD","等待 GitHub Actions 构建、冒烟测试与 GHCR 镜像");
+      let complete=false;
+      for(let attempt=0;attempt<240;attempt++){
+        await sleep("30 seconds");
+        const result=await pollHostedBuild(input,build.id,build.sourceSha!);
+        if(result.kind==="FAILED"){await move("FAILED",result.reason);return state;}
+        if(result.kind==="READY"){state={...state,imageDigest:result.imageDigest};complete=true;break;}
       }
-      if(!ready){await move("NEEDS_RECONCILIATION","超过两小时仍未取得可信构建结果，未部署");return state;}
+      if(!complete){await move("NEEDS_RECONCILIATION","两小时仍未取得可信构建结果，需人工核查");return state;}
     }
-    if(!state.imageDigest){await move("FAILED","缺少不可变 GHCR 镜像");return state;}
-    await move("OPENING_PR","创建 GitOps 变更 PR；不会直接操作 Kubernetes");
-    const pr=await openHostedGitopsPr(input,state.imageDigest);
-    if(pr.kind!=="ACCEPTED"){
-      await move(pr.kind==="UNKNOWN"?"NEEDS_RECONCILIATION":"FAILED",pr.reason);
+    if(!state.imageDigest){await move("FAILED","缺少不可变镜像 Digest");return state;}
+    await move("SYNCING","将经过验证的镜像直接提交到应用的 Kubernetes 环境");
+    const deployed=await applyHostedKube(input,state.imageDigest);
+    if(deployed.kind!=="ACCEPTED"){
+      await move(deployed.kind==="UNKNOWN"?"NEEDS_RECONCILIATION":"FAILED",deployed.reason);
       return state;
     }
-    state={...state,gitopsPrNumber:pr.prNumber};
-    await move("AWAITING_PR","等待有权人员审核并合并 GitOps PR");
-    let merged=false;
-    for(let i=0;i<1008;i++){
-      await sleep("10 minutes");
-      const prResult=await checkGitopsPr(input,pr.prNumber,state.imageDigest!);
-      if(prResult==="CLOSED"){await move("FAILED","GitOps PR 已关闭但未合并");return state;}
-      if(prResult==="MERGED"){merged=true;break;}
-    }
-    if(!merged){await move("NEEDS_RECONCILIATION","超过观察窗口，GitOps PR 状态待核对");return state;}
-    await move("SYNCING","GitOps 已合并；正在注册应用并等待 Argo CD 实际同步");
-    const registration=await registerHostedArgoApp(input);
-    if(registration.kind!=="ACCEPTED"){
-      await move(registration.kind==="UNKNOWN"?"NEEDS_RECONCILIATION":"FAILED",registration.reason);
-      return state;
-    }
-    await move("VERIFYING","验证 Argo CD 实际健康、镜像 Digest 和应用 NodePort");
-    for(let i=0;i<60;i++){
-      await sleep("1 minute");
-      const health=await probeHostedArgo(input,state.imageDigest!);
+    await move("VERIFYING","验证实际 Deployment、镜像、Service 和 HTTP 访问");
+    for(let attempt=0;attempt<120;attempt++){
+      await sleep("30 seconds");
+      const health=await probeHostedKube(input,state.imageDigest);
       if(health.ready){
         state={...state,testedAt:new Date().toISOString()};
-        await move("READY","Argo 已同步且从工作节点访问 NodePort 成功；仍须 Mac 客户端确认 LAN 可达");
+        await move("READY","Kubernetes 镜像/Pod/Service 和工作节点 HTTP 验证成功；仍须独立 LAN 验证");
         return state;
       }
     }
-    await move("NEEDS_RECONCILIATION","Argo/NodePort 在一小时内未通过验证，不标记 READY");
+    await move("NEEDS_RECONCILIATION","一小时内仍未完成 Kubernetes/HTTP 验证，需人工核对");
   }catch{
-    await move("NEEDS_RECONCILIATION","外部请求可能已完成但响应或 Worker 状态未知；停止自动重试并核对 GitHub/Argo");
+    await move("NEEDS_RECONCILIATION","外部发布操作可能已执行；禁止自动重复写入，需核对 Kubernetes 实际状态");
   }
   return state;
 }

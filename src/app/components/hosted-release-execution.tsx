@@ -4,7 +4,7 @@ import {useCallback,useEffect,useState} from "react";
 type Release={
   id:string;environment:"TEST"|"PRODUCTION";status:string;
   sourceSha:string|null;imageDigest:string|null;buildRunId:string|null;
-  gitopsPrNumber:number|null;note:string;
+  note:string;
 };
 type Step={name:string;number:number;status:string;conclusion:string|null;startedAt:string|null;completedAt:string|null};
 type Job={id:number;name:string;status:string;conclusion:string|null;steps:Step[]};
@@ -12,10 +12,6 @@ type Execution={
   release:Release;
   snapshot:{stage:string;note:string}|null;
   build:{state:"OK"|"NO_BUILD"|"UNAVAILABLE";jobs:Job[];note?:string};
-  deployment:{source:string;state:"OK"|"NOT_CONNECTED"|"UNKNOWN";applications:{
-    name:string;sync:string;health:string;operationPhase:string|null;
-    lastSyncedRevision:string|null;lastSyncedAt:string|null;namespace:string;
-  }[]};
   observedAt:string;
 };
 type StageStatus="done"|"current"|"waiting"|"pending"|"failed";
@@ -28,20 +24,15 @@ function phases(r:Release,stage:string):Phase[]{
   const failed=r.status==="FAILED"||r.status==="NEEDS_RECONCILIATION";
   const buildDone=r.environment==="PRODUCTION"||!!r.imageDigest;
   const inBuild=r.status==="BUILDING"||stage==="BUILDING"||stage==="WAITING_BUILD";
-  const prDone=["SYNCING","VERIFYING","READY"].includes(stage)||r.status==="READY";
-  const prPending=["OPENING_PR","AWAITING_PR"].includes(stage)||r.status==="WAITING_PR";
   const deployDone=r.status==="READY";
   const deployActive=["SYNCING","VERIFYING"].includes(stage)||r.status==="DEPLOYING";
   const stages:Phase[]=[
     {title:r.environment==="TEST"?"获取源码、测试与构建镜像":"复用已验证的测试镜像",
       status:phaseStatus(buildDone,inBuild,failed&&!buildDone),
       description:buildDone?"已绑定不可变镜像":"等待可信 CI、构建与镜像校验"},
-    {title:"提交发布变更与审核",
-      status:phaseStatus(prDone,prPending,failed&&buildDone&&!prDone,stage==="AWAITING_PR"),
-      description:stage==="AWAITING_PR"?"需要有权人员审核 GitOps PR":"通过 GitOps 审计目标部署版本"},
     {title:"同步并启动服务器容器",
-      status:phaseStatus(deployDone,deployActive&&stage!=="VERIFYING",failed&&prDone&&!deployDone),
-      description:"Mac mini Kubernetes / Argo CD"},
+      status:phaseStatus(deployDone,deployActive&&stage!=="VERIFYING",failed&&buildDone&&!deployDone),
+      description:"Mac mini Kubernetes 部署"},
     {title:"核验服务与访问入口",
       status:phaseStatus(deployDone,stage==="VERIFYING",failed&&stage==="VERIFYING"),
       description:"核对镜像、Pod Ready 与 NodePort HTTP"}
@@ -49,7 +40,7 @@ function phases(r:Release,stage:string):Phase[]{
   return stages;
 }
 const statusText:Record<StageStatus,string>={
-  done:"完成",current:"执行中",waiting:"待人工审核",pending:"等待",failed:"未完成"
+  done:"完成",current:"执行中",waiting:"等待",pending:"等待",failed:"未完成"
 };
 function jobState(status:string,conclusion:string|null){
   if(conclusion==="success")return "已完成";
@@ -139,21 +130,9 @@ export function HostedReleaseExecution({root,release}:{root:string;release:Relea
           {logs[String(job.id)].text&&<pre>{logs[String(job.id)].text}</pre>}
         </div>}
       </section>)}
-      <div className="section-title"><h5>服务器部署状态</h5><span className="muted">Argo CD 实时只读</span></div>
-      {execution?.deployment.state==="NOT_CONNECTED"&&
-        <p className="muted">门户尚未配置 Argo CD 只读接入，部署事实以已有 Temporal 验证记录为准。</p>}
-      {execution?.deployment.state==="UNKNOWN"&&
-        <p className="muted">Argo CD 暂不可读取，不能据此认定部署成功。</p>}
-      {execution?.deployment.state==="OK"&&!execution.deployment.applications.length&&
-        <p className="muted">此环境尚无已验证归属的 Argo Application，等待部署注册或同步。</p>}
-      {execution?.deployment.applications.map(app=><div key={app.name} className="release-job">
-        <strong>{app.name}</strong>
-        <p>同步：{app.sync} · 健康：{app.health} · 操作：{app.operationPhase??"无进行中操作"}</p>
-        <p className="muted">命名空间：{app.namespace} · 最近部署：
-          {app.lastSyncedAt?new Date(app.lastSyncedAt).toLocaleString("zh-CN"):"未提供时间"}</p>
-        {app.lastSyncedRevision&&<p className="muted">GitOps Revision：<code>{app.lastSyncedRevision.slice(0,12)}</code></p>}
-      </div>)}
-      <p className="muted">步骤约每 8 秒刷新。GitHub 原始日志可能延迟提供；执行状态不是逐行日志推送。Argo 同步和健康不等于应用访问验证。</p>
+      <div className="section-title"><h5>Kubernetes 部署与访问检查</h5></div>
+      <p className="muted">{execution?.snapshot?.note??current.note}</p>
+      <p className="muted">步骤约每 8 秒刷新。GitHub 原始日志可能延迟提供；执行状态不是逐行日志推送。只有 Kubernetes 实际镜像、Pod 就绪和 HTTP 验证都通过才会标记 READY。</p>
     </div>
   </details>;
 }
