@@ -28,7 +28,7 @@ export async function verifiedHostedReleaseWorkflow(input:HostedReleaseInput){
 }
 export async function hostedReleaseWorkflow(input:HostedReleaseInput):Promise<HostedReleaseSnapshot>{
   let state:HostedReleaseSnapshot={releaseId:input.releaseId,stage:"QUEUED",
-    note:"等待受控的直接 Kubernetes 发布",sourceSha:null,buildRunId:null,
+    note:"等待 Kubernetes 发布",sourceSha:input.sourceSha??null,buildRunId:null,
     imageDigest:input.imageDigest??null,testedAt:null};
   setHandler(statusQuery,()=>state);
   async function move(stage:HostedReleaseSnapshot["stage"],note:string){
