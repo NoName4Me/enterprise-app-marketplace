@@ -22,7 +22,7 @@ describe("hosted build dispatch outcome",()=>{
   it("keeps a timed-out POST uncertain and never repeats it",async()=>{
     const fetch=vi.fn()
       .mockResolvedValueOnce(Response.json({default_branch:"master"}))
-      .mockResolvedValueOnce(Response.json({commit:{sha:"a".repeat(40)}}))
+      .mockResolvedValueOnce(Response.json({sha:"a".repeat(40)}))
       .mockResolvedValueOnce(Response.json({id:1}))
       .mockRejectedValueOnce(new Error("response lost after dispatch"));
     vi.stubGlobal("fetch",fetch);
@@ -33,7 +33,7 @@ describe("hosted build dispatch outcome",()=>{
   it("refuses a P5 handoff not contained in master before any workflow dispatch",async()=>{
     const linked={...input,requiredMergeSha:"b".repeat(40)};
     const fetch=vi.fn().mockResolvedValueOnce(Response.json({default_branch:"master"}))
-      .mockResolvedValueOnce(Response.json({commit:{sha:"a".repeat(40)}}))
+      .mockResolvedValueOnce(Response.json({sha:"a".repeat(40)}))
       .mockResolvedValueOnce(Response.json({base_commit:{sha:"b".repeat(40)},
         status:"diverged",ahead_by:1,behind_by:1}));
     vi.stubGlobal("fetch",fetch);
@@ -45,7 +45,7 @@ describe("hosted build dispatch outcome",()=>{
   it("dispatches P5-origin builds only after verifying master contains the approved merge",async()=>{
     const linked={...input,requiredMergeSha:"b".repeat(40)};
     const fetch=vi.fn().mockResolvedValueOnce(Response.json({default_branch:"master"}))
-      .mockResolvedValueOnce(Response.json({commit:{sha:"a".repeat(40)}}))
+      .mockResolvedValueOnce(Response.json({sha:"a".repeat(40)}))
       .mockResolvedValueOnce(Response.json({base_commit:{sha:"b".repeat(40)},
         status:"ahead",ahead_by:2,behind_by:0}))
       .mockResolvedValueOnce(Response.json({id:2}))
@@ -56,6 +56,33 @@ describe("hosted build dispatch outcome",()=>{
     expect(fetch.mock.calls.filter(call=>call[1].method==="POST")).toHaveLength(1);
     const request=JSON.parse(fetch.mock.calls[4][1].body);
     expect(request.inputs.source_sha).toBe("a".repeat(40));
+  });
+  it("resolves a non-default branch to immutable SHA and dispatches that exact source",async()=>{
+    const arbitrary={...input,sourceRef:"feature/portal-v2"};
+    const fetch=vi.fn()
+      .mockResolvedValueOnce(Response.json({default_branch:"master"}))
+      .mockResolvedValueOnce(Response.json({sha:"c".repeat(40)}))
+      .mockResolvedValueOnce(Response.json({id:1}))
+      .mockResolvedValueOnce(Response.json({workflow_run_id:45}));
+    vi.stubGlobal("fetch",fetch);
+    const result=await dispatchHostedBuild(arbitrary);
+    expect(result).toEqual({kind:"ACCEPTED",id:"45",sourceSha:"c".repeat(40)});
+    expect(String(fetch.mock.calls[1][0])).toContain("/commits/feature%2Fportal-v2");
+    const body=JSON.parse(fetch.mock.calls[3][1].body);
+    expect(body.ref).toBe("master");
+    expect(body.inputs.source_sha).toBe("c".repeat(40));
+  });
+  it("resolves historical commit directly, not current branch HEAD",async()=>{
+    const oldCommit="d".repeat(40);
+    const fetch=vi.fn()
+      .mockResolvedValueOnce(Response.json({default_branch:"master"}))
+      .mockResolvedValueOnce(Response.json({sha:oldCommit}))
+      .mockResolvedValueOnce(Response.json({id:1}))
+      .mockResolvedValueOnce(Response.json({workflow_run_id:46}));
+    vi.stubGlobal("fetch",fetch);
+    const result=await dispatchHostedBuild({...input,sourceRef:oldCommit});
+    expect(result.kind).toBe("ACCEPTED");
+    expect(String(fetch.mock.calls[1][0])).toContain("/commits/"+oldCommit);
   });
   it("sends the Application itself as the Argo REST request body",async()=>{
     vi.stubEnv("ARGOCD_SERVER_URL","http://argocd-server.argocd.svc.cluster.local");
