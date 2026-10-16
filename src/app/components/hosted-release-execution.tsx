@@ -92,7 +92,9 @@ export function HostedReleaseExecution({root,release}:{root:string;release:Relea
       if(!response.ok)throw new Error("日志接口不可用");
       const result=await response.json() as {state:string;text:string;note?:string};
       setLogs(current=>({...current,[key]:result}));
-    }catch{setLogs(current=>({...current,[key]:{state:"UNAVAILABLE",text:"",note:"日志暂不可读取"}]}));}
+    }catch{
+      setLogs(current=>({...current,[key]:{state:"UNAVAILABLE",text:"",note:"日志暂不可读取"}}));
+    }
     finally{setLoadingLog(null);}
   }
   const current=execution?.release??release;
