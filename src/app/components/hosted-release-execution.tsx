@@ -2,7 +2,7 @@
 import {useCallback,useEffect,useState} from "react";
 
 type Release={
-  id:string;environment:"TEST"|"PRODUCTION";status:string;
+  id:string;environment:"TEST"|"PRODUCTION";status:string;deployDriver:"GITOPS"|"KUBERNETES";
   sourceSha:string|null;imageDigest:string|null;buildRunId:string|null;
   gitopsPrNumber:number|null;note:string;
 };
@@ -25,10 +25,11 @@ function phaseStatus(done:boolean,current:boolean,failed:boolean,waiting=false):
   return done?"done":failed?"failed":waiting?"waiting":current?"current":"pending";
 }
 function phases(r:Release,stage:string):Phase[]{
+  const direct=r.deployDriver==="KUBERNETES";
   const failed=r.status==="FAILED"||r.status==="NEEDS_RECONCILIATION";
   const buildDone=r.environment==="PRODUCTION"||!!r.imageDigest;
   const inBuild=r.status==="BUILDING"||stage==="BUILDING"||stage==="WAITING_BUILD";
-  const prDone=["SYNCING","VERIFYING","READY"].includes(stage)||r.status==="READY";
+  const prDone=direct||["SYNCING","VERIFYING","READY"].includes(stage)||r.status==="READY";
   const prPending=["OPENING_PR","AWAITING_PR"].includes(stage)||r.status==="WAITING_PR";
   const deployDone=r.status==="READY";
   const deployActive=["SYNCING","VERIFYING"].includes(stage)||r.status==="DEPLOYING";
@@ -36,12 +37,12 @@ function phases(r:Release,stage:string):Phase[]{
     {title:r.environment==="TEST"?"获取源码、测试与构建镜像":"复用已验证的测试镜像",
       status:phaseStatus(buildDone,inBuild,failed&&!buildDone),
       description:buildDone?"已绑定不可变镜像":"等待可信 CI、构建与镜像校验"},
-    {title:"提交发布变更与审核",
+    ...(direct?[]:[{title:"提交发布变更与审核",
       status:phaseStatus(prDone,prPending,failed&&buildDone&&!prDone,stage==="AWAITING_PR"),
-      description:stage==="AWAITING_PR"?"需要有权人员审核 GitOps PR":"通过 GitOps 审计目标部署版本"},
+      description:stage==="AWAITING_PR"?"需要有权人员审核 GitOps PR":"通过 GitOps 审计目标部署版本"} as Phase]),
     {title:"同步并启动服务器容器",
       status:phaseStatus(deployDone,deployActive&&stage!=="VERIFYING",failed&&prDone&&!deployDone),
-      description:"Mac mini Kubernetes / Argo CD"},
+      description:direct?"Mac mini Kubernetes 直接部署":"Mac mini Kubernetes / Argo CD"},
     {title:"核验服务与访问入口",
       status:phaseStatus(deployDone,stage==="VERIFYING",failed&&stage==="VERIFYING"),
       description:"核对镜像、Pod Ready 与 NodePort HTTP"}
@@ -139,14 +140,15 @@ export function HostedReleaseExecution({root,release}:{root:string;release:Relea
           {logs[String(job.id)].text&&<pre>{logs[String(job.id)].text}</pre>}
         </div>}
       </section>)}
-      <div className="section-title"><h5>服务器部署状态</h5><span className="muted">Argo CD 实时只读</span></div>
-      {execution?.deployment.state==="NOT_CONNECTED"&&
+      <div className="section-title"><h5>服务器部署状态</h5><span className="muted">{current.deployDriver==="KUBERNETES"?"Kubernetes / Temporal":"Argo CD 实时只读"}</span></div>
+      {current.deployDriver==="KUBERNETES"&&<p className="muted">直接部署状态以本次 Temporal 执行与 Kubernetes 健康验证为准：{execution?.snapshot?.note??current.note}</p>}
+      {current.deployDriver==="GITOPS"&&execution?.deployment.state==="NOT_CONNECTED"&&
         <p className="muted">门户尚未配置 Argo CD 只读接入，部署事实以已有 Temporal 验证记录为准。</p>}
-      {execution?.deployment.state==="UNKNOWN"&&
+      {current.deployDriver==="GITOPS"&&execution?.deployment.state==="UNKNOWN"&&
         <p className="muted">Argo CD 暂不可读取，不能据此认定部署成功。</p>}
-      {execution?.deployment.state==="OK"&&!execution.deployment.applications.length&&
+      {current.deployDriver==="GITOPS"&&execution?.deployment.state==="OK"&&!execution.deployment.applications.length&&
         <p className="muted">此环境尚无已验证归属的 Argo Application，等待部署注册或同步。</p>}
-      {execution?.deployment.applications.map(app=><div key={app.name} className="release-job">
+      {current.deployDriver==="GITOPS"&&execution?.deployment.applications.map(app=><div key={app.name} className="release-job">
         <strong>{app.name}</strong>
         <p>同步：{app.sync} · 健康：{app.health} · 操作：{app.operationPhase??"无进行中操作"}</p>
         <p className="muted">命名空间：{app.namespace} · 最近部署：
