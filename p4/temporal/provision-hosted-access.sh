@@ -17,7 +17,7 @@ kubectl create serviceaccount portal-hosted-worker -n marketplace --dry-run=clie
 # The Portal reads only namespace identity and current deployment/service status.
 kubectl create serviceaccount portal-hosted-reader -n marketplace --dry-run=client -o yaml | kubectl apply -f -
 kubectl create clusterrole portal-hosted-namespace-reader --verb=get --resource=namespaces --dry-run=client -o yaml | kubectl apply -f -
-kubectl create clusterrolebinding portal-hosted-namespace-reader --clusterrole=portal-hosted-namespace-reader \
+kubectl create clusterrolebinding portal-hosted-portal-namespace-reader --clusterrole=portal-hosted-namespace-reader \
   --serviceaccount=marketplace:portal-hosted-reader --dry-run=client -o yaml | kubectl apply -f -
 kubectl create clusterrole portal-hosted-namespace-reader --verb=get --resource=namespaces --dry-run=client -o yaml | kubectl apply -f -
 kubectl create clusterrolebinding portal-hosted-namespace-reader --clusterrole=portal-hosted-namespace-reader \
