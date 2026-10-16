@@ -22,3 +22,17 @@ GitHub 仅提供源代码、代码 PR、目前的 Actions/GHCR；需求始终由
 8. 在门户新建 TEST 发布（建议非默认分支），确认 **没有新的 GitOps PR**，Portal 显示版本号、源码 SHA、构建步骤/日志、健康验证和 READY；再验证 PRODUCTION 选已验证 TEST 镜像。先不宣称生产可用或独立 LAN 客户端已验收。
 
 **注意**：执行 `0013` 只清理 PostgreSQL 中的旧发布记录，不会自动移除 Kubernetes/Argo 的控制器。两者要分别处理。此流程尚待 Mac mini 直发模式真实 E2E 验证，不能把之前 #31 的 GitOps E2E 当作直发验收。
+
+## 「运行」页：默认生产，测试可切换（2026-10-16）
+
+打开托管应用的「运行」Tab 后，门户自动读取 **PRODUCTION** 的当前状态，不需要再按「读取应用状态」。右上角可切换到 **TEST**，读取另一个真实 Kubernetes 命名空间的 Deployment/Service、镜像 Digest、Pod 就绪、副本、NodePort 和 HTTP。显示上一次发布版本号和说明，但 **仅发布记录为 READY 不等于当前运行健康**。刷新按钮用于手工重试或获取最新状态。
+
+没有生产发布时显示「生产环境尚未发布」，并提供「查看测试环境」入口；不会偷偷回退到测试环境，更不会把 TEST 状态标成生产。不可访问 Kubernetes API/缺少 RBAC 时标记状态「暂不可读」，不能报运行正常。外部应用仍使用原有只读监控面板。
+
+首次部署新版门户（只需一次）需要给它绑定 **只读** ServiceAccount；该账号不能部署或修改应用、不能读取 Secret。
+
+1. 在本地对每个 TEST/PRODUCTION 环境重新执行一次 `bash p4/temporal/provision-hosted-access.sh <app-uuid> <env-uuid> TEST` 或 `PRODUCTION`。脚本现在同时给 `portal-hosted-reader` 授予当前环境 Deployment/Service 的 `get` 权限，并给这个账号全局只读 Namespace `get` 以核实应用/环境标签。已存在 Worker、Deployment、Service、数据卷保留。
+2. 脚本先创建好 SA 后，更新 **实际运行的门户 Deployment** 使用 `portal-hosted-reader`：`kubectl -n marketplace patch deployment marketplace-portal --type=merge -p '{"spec":{"template":{"spec":{"serviceAccountName":"portal-hosted-reader"}}}}'`。不需要重新安装基础设施，也不应该误覆盖当前容器镜像。
+3. 升级门户镜像，打开应用 `?view=operations`，验证初次展示生产环境（未部署时显示空状态），再切到 TEST，确认镜像和 READY 与真实 `kubectl -n <namespace> get deploy web` 匹配；尝试未授权读取应返回 401/404。
+
+**PRODUCTION 与第二台 LAN 客户端尚未实机验收。** 后续测试时：在门户从 TEST 的 `v1.1.0-e2e` 选择原 Digest 发布 PRODUCTION（不重新 Actions 构建）、实际确认生产与测试 namespace 和 NodePort 相互独立，然后在第二台同网段设备直接访问生产和测试端口。未经这些验证，不在报告里写 PASS。

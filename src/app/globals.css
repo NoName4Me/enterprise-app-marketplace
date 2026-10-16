@@ -444,3 +444,7 @@ p { line-height: 1.75; overflow-wrap: anywhere; }
 .release-job button{margin-top:8px;}
 .release-log-output pre{background:var(--background);border:1px solid var(--border);border-radius:7px;max-height:380px;overflow:auto;padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.78rem;}
 @media(max-width:760px){.release-job li{grid-template-columns:18px minmax(0,1fr) auto;}.release-job li time{display:none;}}
+
+/* Authenticated, environment-scoped hosted runtime overview. */
+.ops-break {overflow-wrap:anywhere;word-break:break-word;}
+.ops-topline .actions {flex-wrap:wrap;}
