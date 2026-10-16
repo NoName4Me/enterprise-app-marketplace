@@ -10,7 +10,6 @@ export function trustedMergeAncestry(compare:unknown,mergeSha:string,headSha:str
   if(!SHA.test(mergeSha)||!SHA.test(headSha))return false;
   const data=obj(compare);
   return str(obj(data.base_commit).sha)===mergeSha &&
-    str(obj(data.commits).sha)!==headSha &&
     (data.status==="ahead"||data.status==="identical") &&
     Number.isSafeInteger(data.ahead_by) && Number(data.ahead_by)>=0 &&
     data.behind_by===0;
