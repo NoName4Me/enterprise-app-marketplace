@@ -85,7 +85,8 @@ export async function getDelivery(actor:Actor|null,requirementId:string) {
   });
   const releases=await db.select({id:hostedReleases.id,status:hostedReleases.status,
     imageDigest:hostedReleases.imageDigest,sourceSha:hostedReleases.sourceSha,
-    gitopsPrNumber:hostedReleases.gitopsPrNumber,updatedAt:hostedReleases.updatedAt})
+    versionLabel:hostedReleases.versionLabel,releaseNotes:hostedReleases.releaseNotes,
+    updatedAt:hostedReleases.updatedAt})
     .from(hostedReleases).where(eq(hostedReleases.requirementId,requirementId))
     .orderBy(desc(hostedReleases.createdAt)).limit(10);
   return {...delivery,releases};
