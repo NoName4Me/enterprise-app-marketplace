@@ -39,7 +39,7 @@ export async function listHostedReleases(actor:Actor|null,appId:string){
   }))};
 }
 export async function startHostedRelease(actor:Actor|null,appId:string,environment:unknown,testedReleaseId:unknown=null,
-  linkage?:{requirementId:string;requiredMergeSha:string}){
+  linkage?:{requirementId:string;requiredMergeSha:string;repository:string}){
   if(linkage && (environment!=="TEST"||!UUID.test(linkage.requirementId)||
     !/^[a-f0-9]{40}$/.test(linkage.requiredMergeSha)))
     throw new AppError(422,"invalid_delivery_release_link");
@@ -59,6 +59,8 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
       throw new AppError(422,"not_deployable");
     if(!allowedRepo(app.sourceRepository))throw new AppError(403,"hosted_repository_not_allowed");
     if(linkage){
+      if(app.sourceRepository.toLowerCase()!==linkage.repository.toLowerCase())
+        throw new AppError(409,"delivery_repository_changed");
       const [req]=await tx.select({appId:requirements.appId}).from(requirements)
         .where(eq(requirements.id,linkage.requirementId)).limit(1);
       if(!req||req.appId!==appId)throw new AppError(422,"invalid_delivery_release_link");
