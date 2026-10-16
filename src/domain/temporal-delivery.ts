@@ -1,7 +1,8 @@
 import { Connection, WorkflowClient } from "@temporalio/client";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { codingTasks } from "@/db/schema";
+import { codingTasks,hostedReleases } from "@/db/schema";
+import { startHostedRelease } from "./hosted-release-service";
 import { AppError } from "./app-errors";
 import type { Actor } from "./actor";
 import { permittedOwner, sourceRepo } from "./coding-agent-service";
@@ -68,7 +69,7 @@ export async function getDelivery(actor:Actor|null,requirementId:string) {
     state:"LEGACY_EXTERNAL_TASK",workflowId,
     note:"该需求存在旧版直接 Copilot 任务："+reservation.externalTaskId+"；须先在 GitHub 人工核对，不能自动转为 Temporal 任务。",
   };
-  return withClient(async client=>{
+  const delivery=await withClient(async client=>{
     const handle=client.getHandle(workflowId);
     try {
       const description=await handle.describe();
@@ -82,6 +83,25 @@ export async function getDelivery(actor:Actor|null,requirementId:string) {
       throw error;
     }
   });
+  const releases=await db.select({id:hostedReleases.id,status:hostedReleases.status,
+    imageDigest:hostedReleases.imageDigest,sourceSha:hostedReleases.sourceSha,
+    gitopsPrNumber:hostedReleases.gitopsPrNumber,updatedAt:hostedReleases.updatedAt})
+    .from(hostedReleases).where(eq(hostedReleases.requirementId,requirementId))
+    .orderBy(desc(hostedReleases.createdAt)).limit(10);
+  return {...delivery,releases};
+}
+/** Explicit owner action. Never automatically deploy on PR merge or accept a SHA from the browser. */
+export async function startDeliveryTestRelease(actor:Actor|null,requirementId:string){
+  const {req}=await permittedOwner(actor,requirementId);
+  const repository=await sourceRepo(req.appId!);
+  const snapshot=await withClient(async client=>
+    client.getHandle(workflowIdFor(req.id)).query<DeliverySnapshot>("deliveryStatus"));
+  if(snapshot.stage!=="AWAITING_TEST_RELEASE"||
+    snapshot.repository.toLowerCase()!==repository.toLowerCase()||
+    !snapshot.reviewedMergeSha||!/^[a-f0-9]{40}$/.test(snapshot.reviewedMergeSha))
+    throw new AppError(409,"delivery_test_not_ready");
+  return startHostedRelease(actor,req.appId!,"TEST",null,{
+    requirementId:req.id,requiredMergeSha:snapshot.reviewedMergeSha,repository});
 }
 export async function reviewDelivery(actor:Actor|null,requirementId:string,decision:"APPROVE"|"REJECT") {
   const {req,actorData}=await permittedOwner(actor,requirementId);
