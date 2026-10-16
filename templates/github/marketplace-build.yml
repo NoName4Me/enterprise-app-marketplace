@@ -39,7 +39,9 @@ jobs:
           [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test -f Dockerfile
-      # TEST may build any commit in the registered repository. The workflow checks out source_sha\n      # exactly and performs the build + smoke test before emitting a trusted digest.\n      - name: Prepare lowercase GHCR coordinates
+      # TEST may build any commit in the registered repository. The workflow checks out source_sha
+      # exactly and performs the build + smoke test before emitting a trusted digest.
+      - name: Prepare lowercase GHCR coordinates
         id: meta
         env:
           REPO: ${{ github.repository }}

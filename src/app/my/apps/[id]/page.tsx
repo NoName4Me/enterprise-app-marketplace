@@ -9,7 +9,6 @@ import { mayCreateApp } from "@/lib/access";
 import { statusName } from "@/lib/marketplace-labels";
 import { AssetWorkspace } from "@/app/components/asset-workspace";
 import { GithubLivePanel } from "@/app/components/github-live-panel";
-import { ArgoCDLivePanel } from "@/app/components/argocd-live-panel";
 import { DevopsEvidencePanel } from "@/app/components/devops-evidence-panel";
 import { ApplicationForm } from "../application-form";
 import { RevisionAction } from "../revision-action";
@@ -87,12 +86,11 @@ export default async function ManagedApplication({params,searchParams}:{
           {testEndpoint?.url?<a href={testEndpoint.url} target="_blank" rel="noopener noreferrer">访问测试环境 →</a>:<span className="tag">待验证镜像与访问</span>}</article>
         <article><h4>生产环境</h4><p className="muted">预留端口：{productionEndpoint?.port??"未分配"} · {productionEndpoint?.state??"未预留"}</p>
           {productionEndpoint?.url?<a href={productionEndpoint.url} target="_blank" rel="noopener noreferrer">访问生产环境 →</a>:<span className="tag">尚未发布</span>}</article></div>
-        <p className="notice">发布由 Temporal 发起构建、生成 GitOps PR，并在审核合并后交由 Argo CD 同步。未配置构建模板、集群入口或权限时将明确显示失败原因；仅实际验证通过后标记可用。</p>
+        <p className="notice">发布由 Temporal 发起构建，并将验证后的镜像部署到应用的 Kubernetes 环境。未配置构建模板、环境权限或访问入口时将明确显示失败原因；仅实际验证通过后标记可用。</p>
       </>}
     </section>
     {hosted&&repo&&<HostedReleasePanel root={root} repo={repo}
       productionDigest={productionEndpoint?.imageDigest??null}/>}
-    {hosted&&<ArgoCDLivePanel root={root} registered={2}/>}
   </div>}
   {view==="operations"&&<div className="stack">
     {!hosted&&<p className="notice">外部应用尚未接入平台托管监控；仅在明确绑定观测来源后提供诊断。</p>}
