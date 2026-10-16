@@ -366,6 +366,7 @@ export const hostedReleases = pgTable("hosted_releases", {
   environment: text("environment", {enum:["TEST","PRODUCTION"]}).notNull(),
   requirementId: uuid("requirement_id").references(() => requirements.id, {onDelete:"restrict"}),
   requestedBy: text("requested_by").notNull().references(() => user.id, {onDelete:"restrict"}),
+  deployDriver: text("deploy_driver", {enum:["GITOPS","KUBERNETES"]}).notNull().default("GITOPS"),
   status: text("status", {enum:["REQUESTING","BUILDING","WAITING_PR","DEPLOYING","READY","FAILED","NEEDS_RECONCILIATION"]}).notNull().default("REQUESTING"),
   workflowId: text("workflow_id").notNull().unique(),
   sourceRef: text("source_ref"), versionLabel: text("version_label"), releaseNotes: text("release_notes"),
