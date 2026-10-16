@@ -6,6 +6,7 @@ import {HostedReleaseExecution} from "./hosted-release-execution";
 type Release={
   id:string;environment:"TEST"|"PRODUCTION";
   status:"REQUESTING"|"BUILDING"|"WAITING_PR"|"DEPLOYING"|"READY"|"FAILED"|"NEEDS_RECONCILIATION";
+  deployDriver:"GITOPS"|"KUBERNETES";
   sourceRef:string|null;versionLabel:string|null;releaseNotes:string|null;
   sourceSha:string|null;buildRunId:string|null;
   imageDigest:string|null;gitopsPrNumber:number|null;
@@ -13,7 +14,7 @@ type Release={
 };
 const labels={
   REQUESTING:"任务已提交",BUILDING:"正在构建镜像",
-  WAITING_PR:"等待 GitOps 审核",DEPLOYING:"正在部署与验证",
+  WAITING_PR:"等待发布审核",DEPLOYING:"正在部署与验证",
   READY:"已通过部署验证",FAILED:"部署未完成",NEEDS_RECONCILIATION:"需要人工核对"
 };
 const active=(status:Release["status"])=>["REQUESTING","BUILDING","WAITING_PR","DEPLOYING"].includes(status);
@@ -69,7 +70,7 @@ export function HostedReleasePanel({root,repo,productionDigest}:{
     if(environment==="TEST"&&(!versionLabel.trim()||!releaseNotes.trim())){
       setError("测试发布必须填写版本号和发布说明。");return;
     }
-    if(environment==="PRODUCTION"&&!confirm("确认将测试环境验证的完全相同镜像提交生产发布审批？正式流量变更需要 GitOps PR 人工审核。"))return;
+    if(environment==="PRODUCTION"&&!confirm("确认将 TEST 已验证的完全相同镜像发布到生产？生产发布仍受平台操作权限限制。"))return;
     setBusy(true);setError("");
     try{
       const response=await fetch(root+"/hosted/releases",{
@@ -87,8 +88,8 @@ export function HostedReleasePanel({root,repo,productionDigest}:{
     finally{setBusy(false);}
   }
   return <section className="card hosted-release-panel">
-    <div className="section-title"><h3>应用交付</h3><span className="tag">Temporal + GitHub + Argo CD</span></div>
-    <p className="muted">平台自动从 GitHub 执行构建，并在有权人员审核 GitOps 变更后部署；生产仅能发布已验证的测试镜像。</p>
+    <div className="section-title"><h3>应用交付</h3><span className="tag">Temporal + GitHub Actions + Kubernetes</span></div>
+    <p className="muted">门户统一构建和部署；Kubernetes 直发模式无需 GitOps PR。生产只复用已验证的 TEST 镜像。</p>
     <div className="release-action-grid">
       <div className="release-action">
         <strong>1. 构建并部署测试</strong>
@@ -144,7 +145,7 @@ export function HostedReleasePanel({root,repo,productionDigest}:{
         <div className="actions">
           {r.buildRunId&&<a target="_blank" rel="noopener noreferrer"
             href={"https://github.com/"+repo+"/actions/runs/"+r.buildRunId}>构建详情 →</a>}
-          {r.gitopsPrNumber&&<a target="_blank" rel="noopener noreferrer"
+          {r.deployDriver==="GITOPS"&&r.gitopsPrNumber&&<a target="_blank" rel="noopener noreferrer"
             href={"https://github.com/NoName4Me/enterprise-app-marketplace/pull/"+r.gitopsPrNumber}>审核发布 PR →</a>}
         </div>
         <HostedReleaseExecution root={root} release={r}/>
