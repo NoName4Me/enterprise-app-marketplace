@@ -13,7 +13,7 @@
 
 ## 一次性接入：源仓库管理员
 
-将本仓库的 [`templates/github/marketplace-build.yml`](../templates/github/marketplace-build.yml) 放进目标应用源仓库的 `.github/workflows/marketplace-build.yml`（默认分支），保证源仓库根目录有可构建的 `Dockerfile`。该工作流只运行于 GitHub 托管 ARM64 Runner，拥有源仓库 `contents:read / packages:write / deployments:write`，不接触 Mac 或 Kubernetes Secret。需要仓库能使用 GH Actions 和 GHCR。如果源仓库没有接入，平台会明确拒绝自动构建。
+将本仓库的 [`templates/github/marketplace-build.yml`](../templates/github/marketplace-build.yml) 放进目标应用源仓库的 `.github/workflows/marketplace-build.yml`（默认分支 `master`），保证源仓库根目录有可构建的 `Dockerfile`。发布前必须有当前 `master` HEAD 对应的 `.github/workflows/ci.yml` 成功 push 完整 CI；模板在发布 GHCR 前再次核对该 SHA 与 CI 记录，不接受无验证分支或历史 master。源仓库现有 CI 只自动验证，镜像发布须手动触发。该工作流只运行于 GitHub 托管 ARM64 Runner，拥有源仓库 `contents:read / actions:read / packages:write / deployments:write`，不接触 Mac 或 Kubernetes Secret。需要仓库能使用 GH Actions 和 GHCR。如果源仓库没有接入，平台会明确拒绝自动构建。
 
 **容器约定**：当前模板默认容器监听 `8080`，且访问根路径 `/` 会返回 HTTP 2xx；不满足此约定的仓库还需要平台侧配置入口端口/探测路径的后续支持。模板产出的 GHCR 包需允许本机 Kubernetes 拉取。首版建议使用可匿名拉取的 GHCR 镜像；私有包必须由管理员先在相应应用命名空间配置 `imagePullSecret` 或受控镜像凭据同步机制，不要把 GHCR PAT 写入 GitOps。
 
@@ -24,6 +24,7 @@
 - 门户原 `portal-runtime` Secret 还需 `HOSTED_PUBLIC_IP=<稳定且从 Worker 能访问的内网 IPv4>`，`P4_DEPLOY_OPERATOR_IDS=<实际用户ID>`。前者只用于实际 READY 访问链接，不表示已开放 LAN 端口。
 - Temporal Worker 使用 `portal-worker-runtime` Secret，新增 `DATABASE_URL=<现有 market 的 Kubernetes 可达地址>`、`HOSTED_GITHUB_SOURCE_TOKEN`（源仓库 Actions 读写、内容/Deployment 只读）、`HOSTED_GITOPS_TOKEN`（**仅平台 GitOps 仓库** Contents + PR 写）、`HOSTED_ARGO_APPLICATION_TOKEN`（**只允许受限 project** `marketplace-hosted` 的 Applications create/get）、`ARGOCD_SERVER_URL` 及相同 `HOSTED_PUBLIC_IP`。生产密钥严格分离，不放源仓库 Actions，也不通过浏览器传给用户。
 - Argo CD 管理员安装本仓库的 `p4/gitops/hosted/project.yaml`。确保当前平台 repo 的 `dev` 允许受控 GitOps PR、合并受分支保护/必需 CI 和批准人限制；平台默认不会替人批准 PR。
+- 使用本机代理时，Node Worker 需显式配置 `NODE_USE_ENV_PROXY=1`、`HTTP_PROXY`、`HTTPS_PROXY`，并通过 `NO_PROXY` 排除集群 Service DNS 与内网 IP；仅设置系统代理不会保证 Node fetch 能访问 GitHub。此配置要求支持该开关的 Node 22 版本。
 - Worker 使用新 Dockerfile 构建 ARM64 镜像并滚动替换 `portal-temporal-worker`。检查其可访问 GitHub REST、现有 PostgreSQL、Argo ClusterIP 和固定 NodePort。
 
 ```sh
@@ -47,7 +48,7 @@ kubectl get svc -A -o wide
 ## 尚未完成与验收状态
 
 **代码 CI 可验证，但尚未在你的 Mac mini 实测真实 GitHub Actions/GHCR、GitOps PR 合并、Argo 同步、NodePort 服务访问、私有 GHCR 拉取和单机重启恢复。** 此项全部标记 `NOT RUN`，不得把合并前的 PR、构建成功或端口预留误称部署完成。
-仍需后续支持自动为任意仓库建立标准构建工作流（当前是一次性管理员接入）、私有 GHCR Pull Secret 自动同步、非 8080 端口与不同业务健康端点、可回滚版本选择、监控/AI 事件自动反馈。
+仍需后续支持自动为任意仓库建立标准构建工作流（当前是一次性管理员接入）、私有 GHCR Pull Secret 自动同步、非 8080 端口与不同业务健康端点、监控/AI 事件自动反馈。
 
 ## 生产版本选择与安全回退（本轮）
 

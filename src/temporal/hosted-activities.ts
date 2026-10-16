@@ -79,6 +79,7 @@ export async function dispatchHostedBuild(input:HostedReleaseInput):Promise<Exte
     return {kind:"REJECTED",reason:"仓库或应用标识无效"};
   const access=token("HOSTED_GITHUB_SOURCE_TOKEN");
   if(!access)return {kind:"REJECTED",reason:"缺少 HOSTED_GITHUB_SOURCE_TOKEN"};
+  let dispatchStarted=false;
   try{
     const repo=await gh("/repos/"+input.repository,access);
     if(!repo.ok)return {kind:"REJECTED",reason:"源仓库访问失败或权限不足"};
@@ -91,6 +92,7 @@ export async function dispatchHostedBuild(input:HostedReleaseInput):Promise<Exte
     if(!SHA.test(sha))return {kind:"REJECTED",reason:"代码 Commit 无效"};
     const wf=await gh("/repos/"+input.repository+"/actions/workflows/marketplace-build.yml",access);
     if(!wf.ok)return {kind:"REJECTED",reason:"源仓库尚未安装 marketplace-build.yml 标准构建工作流"};
+    dispatchStarted=true;
     const result=await gh("/repos/"+input.repository+"/actions/workflows/marketplace-build.yml/dispatches",access,{
       method:"POST",
       body:JSON.stringify({ref:branch,return_run_details:true,inputs:{
@@ -103,7 +105,9 @@ export async function dispatchHostedBuild(input:HostedReleaseInput):Promise<Exte
     const body=await json(result),id=num(body.workflow_run_id);
     if(!Number.isSafeInteger(id)||id<1)return {kind:"UNKNOWN",reason:"GitHub 未返回可识别的 Workflow Run ID"};
     return {kind:"ACCEPTED",id:String(id),sourceSha:sha};
-  }catch{return {kind:"UNKNOWN",reason:"网络超时，构建可能已开始；请在源仓库 Actions 核查"};}
+  }catch{return dispatchStarted
+    ?{kind:"UNKNOWN",reason:"网络超时，构建可能已开始；请在源仓库 Actions 核查"}
+    :{kind:"REJECTED",reason:"GitHub 只读接入检查失败，尚未派发构建；请检查 Worker 网络"};}
 }
 
 export async function pollHostedBuild(input:HostedReleaseInput,runId:string,sourceSha:string):Promise<BuildProgress>{
@@ -175,7 +179,8 @@ export async function openHostedGitopsPr(input:HostedReleaseInput,image:string):
     });
     if(created.status!==201)return {kind:"UNKNOWN",reason:"分支可能已创建，请检查 "+branch+"；停止自动重试"};
     const pr=await gh("/repos/"+gitopsRepo+"/pulls",access,{
-      method:"POST",body:JSON.stringify({title:"release: "+input.appId+" "+input.environment,
+      method:"POST",body:JSON.stringify({title:"feat(release): 托管应用"+
+        (input.environment==="TEST"?"测试":"生产")+"发布 "+input.appId,
         head:branch,base:"dev",
         body:"Portal-Release-ID: "+input.releaseId+"\nSource: "+input.repository+
           "\nImage: "+image+"\n\n请审核镜像来源、NodePort 和命名空间；合并后才允许 Argo 同步。"})

@@ -6,7 +6,7 @@ export const hostedReleaseStatus=defineQuery<HostedReleaseSnapshot>("hostedRelea
 // Never retry a remote POST of unknown outcome. DB status updates are idempotent.
 const {dispatchHostedBuild,openHostedGitopsPr,registerHostedArgoApp}=proxyActivities<
   Pick<typeof hosted,"dispatchHostedBuild"|"openHostedGitopsPr"|"registerHostedArgoApp">
->({startToCloseTimeout:"45 seconds",retry:{maximumAttempts:1}});
+>({startToCloseTimeout:"90 seconds",retry:{maximumAttempts:1}});
 const {pollHostedBuild,checkGitopsPr,probeHostedArgo}=proxyActivities<
   Pick<typeof hosted,"pollHostedBuild"|"checkGitopsPr"|"probeHostedArgo">
 >({startToCloseTimeout:"30 seconds",retry:{maximumAttempts:2}});

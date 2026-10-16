@@ -14,6 +14,7 @@ on:
         type: string
 permissions:
   contents: read
+  actions: read
   packages: write
   deployments: write
 concurrency:
@@ -38,6 +39,43 @@ jobs:
           [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test -f Dockerfile
+      - name: Require successful master CI before manual publication
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          test "$REF" = refs/heads/master
+          node - <<'NODE'
+          const headers={Authorization:'Bearer '+process.env.GITHUB_TOKEN,
+            Accept:'application/vnd.github+json'};
+          const base='https://api.github.com/repos/'+process.env.REPO;
+          async function get(path){
+            const r=await fetch(base+path,{headers});
+            if(!r.ok)throw new Error('CI verification failed: '+r.status);
+            return r.json();
+          }
+          async function main(){
+            const head=await get('/branches/master');
+            if(head.commit.sha!==process.env.SOURCE_SHA)throw new Error('Source must be current master HEAD');
+            const result=await get('/actions/workflows/ci.yml/runs?event=push&branch=master&head_sha='+process.env.SOURCE_SHA+'&per_page=100');
+            const run=result.workflow_runs.find(x=>x.head_sha===process.env.SOURCE_SHA&&
+              x.event==='push'&&x.status==='completed'&&x.conclusion==='success'&&
+              x.path==='.github/workflows/ci.yml');
+            if(!run)throw new Error('Current master has no successful full ci.yml run');
+            console.log('Verified master CI run '+run.id);
+          }
+          main().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+      - name: Prepare lowercase GHCR coordinates
+        id: meta
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          echo "image=ghcr.io/${REPO,,}" >> "$GITHUB_OUTPUT"
+          echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
       - uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3
         with:
@@ -52,7 +90,10 @@ jobs:
           file: ./Dockerfile
           platforms: linux/arm64
           push: true
-          tags: ghcr.io/${{ github.repository }}:portal-${{ inputs.app_id }}-${{ inputs.source_sha }}
+          tags: ${{ steps.meta.outputs.image }}:portal-${{ inputs.app_id }}-${{ inputs.source_sha }}
+          build-args: |
+            BUILD_SHA=${{ inputs.source_sha }}
+            BUILD_TIME=${{ steps.meta.outputs.built_at }}
           provenance: true
       - name: Smoke-test the published container before it is eligible to deploy
         env:
