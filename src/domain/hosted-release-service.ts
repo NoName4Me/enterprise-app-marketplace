@@ -108,7 +108,7 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
   // Keep the unique release row and demand operator reconciliation, never dispatch twice.
   try{
     await withClient(async client=>{
-      await client.start("hostedReleaseWorkflow",{
+      await client.start(linkage?"verifiedHostedReleaseWorkflow":"hostedReleaseWorkflow",{
         workflowId:current.workflowId,taskQueue:DELIVERY_QUEUE,args:[current.input],
         workflowIdReusePolicy:"REJECT_DUPLICATE",workflowIdConflictPolicy:"FAIL"
       });
