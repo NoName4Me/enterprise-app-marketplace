@@ -17,6 +17,7 @@ spec:
       labels:
         app.kubernetes.io/name: portal-temporal-worker
     spec:
+      serviceAccountName: portal-hosted-worker
       terminationGracePeriodSeconds: 45
       containers:
         - name: worker
