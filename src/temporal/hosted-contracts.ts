@@ -2,6 +2,8 @@ export type HostedEnvironment = "TEST"|"PRODUCTION";
 export type HostedReleaseInput = {
   releaseId:string;appId:string;environment:HostedEnvironment;
   environmentId:string;nodePort:number;repository:string;
+  // Human-selected git branch or commit in this application\'s registered source repository.
+  sourceRef?:string;
   // Production consumes a previously VERIFIED TEST digest, never rebuilds.
   imageDigest?:string;
   // P5 handoff only: build source must descend from this GitHub-verified dev PR merge SHA.

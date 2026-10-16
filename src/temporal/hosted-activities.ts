@@ -86,19 +86,19 @@ export async function dispatchHostedBuild(input:HostedReleaseInput):Promise<Exte
     const info=await json(repo),branch=str(info.default_branch);
     if(!/^[a-zA-Z0-9._/-]{1,120}$/.test(branch)||branch.includes(".."))
       return {kind:"REJECTED",reason:"仓库默认分支不受支持"};
-    const head=await gh("/repos/"+input.repository+"/branches/"+encodeURIComponent(branch),access);
-    if(!head.ok)return {kind:"REJECTED",reason:"无法确认默认分支 SHA"};
-    const sha=str(value((await json(head)).commit).sha);
+    const selected=input.sourceRef??branch;
+    const head=await gh("/repos/"+input.repository+"/commits/"+encodeURIComponent(selected),access);
+    if(!head.ok)return {kind:"REJECTED",reason:"无法在该应用仓库解析指定分支或 Commit"};
+    const sha=str((await json(head)).sha);
     if(!SHA.test(sha))return {kind:"REJECTED",reason:"代码 Commit 无效"};
     if(input.requiredMergeSha){
-      // The standard GHCR template publishes current master only. A dev PR is NOT
-      // proof of deployable master code; check ancestry before dispatching anything.
-      if(branch!=="master"||!SHA.test(input.requiredMergeSha))
-        return {kind:"REJECTED",reason:"需求交付必须晋级到可信 master 后才能发布 TEST"};
+      // P5 handoff must deploy an actual descendant of the verified PR merge.
+      if(!SHA.test(input.requiredMergeSha))
+        return {kind:"REJECTED",reason:"需求交付来源 SHA 无效"};
       const compare=await gh("/repos/"+input.repository+"/compare/"+
         input.requiredMergeSha+"..."+sha,access);
       if(!compare.ok||!trustedMergeAncestry(await json(compare),input.requiredMergeSha,sha))
-        return {kind:"REJECTED",reason:"已审核需求的 PR 合并 SHA 不属于当前 master 历史；请先人工晋级并保留提交祖先关系"};
+        return {kind:"REJECTED",reason:"所选版本不包含已审核需求的合并提交；拒绝关联交付"};
     }
     const wf=await gh("/repos/"+input.repository+"/actions/workflows/marketplace-build.yml",access);
     if(!wf.ok)return {kind:"REJECTED",reason:"源仓库尚未安装 marketplace-build.yml 标准构建工作流"};

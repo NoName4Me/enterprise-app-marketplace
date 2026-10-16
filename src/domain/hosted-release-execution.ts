@@ -48,6 +48,8 @@ async function context(actor:Actor|null,appId:string,releaseId:string){
 }
 async function jobsFor(repo:string,runId:string|null):Promise<ReadResult>{
   if(!runId||!JOB.test(runId))return {state:"NO_BUILD",jobs:[]};
+  if(!process.env.HOSTED_GITHUB_LOG_TOKEN?.trim())
+    return {state:"UNAVAILABLE",jobs:[],note:"请在门户配置 HOSTED_GITHUB_LOG_TOKEN（Actions:read），避免匿名 API 配额限制"};
   try{
     const response=await github("/repos/"+repo+"/actions/runs/"+runId+"/jobs?filter=latest&per_page="+MAX_JOBS);
     if(!response.ok)return {state:"UNAVAILABLE",jobs:[],note:"GitHub 作业状态暂不可读取，请检查日志只读权限"};

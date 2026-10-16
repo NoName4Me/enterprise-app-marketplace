@@ -9,8 +9,9 @@ export function GET(req:Request,ctx:Context){
 }
 export function POST(req:Request,ctx:Context){
   return assetWrite(req,async(actor,data)=>{
-    if(Object.keys(data).some(key=>key!=="environment"&&key!=="testedReleaseId"))
+    if(Object.keys(data).some(key=>key!=="environment"&&key!=="testedReleaseId"&&key!=="sourceRef"&&key!=="versionLabel"&&key!=="releaseNotes"))
       throw new AppError(422,"unknown_field");
-    return startHostedRelease(actor,(await ctx.params).id,data.environment,data.testedReleaseId??null);
+    return startHostedRelease(actor,(await ctx.params).id,data.environment,data.testedReleaseId??null,undefined,
+      {sourceRef:data.sourceRef,versionLabel:data.versionLabel,releaseNotes:data.releaseNotes});
   },201);
 }
