@@ -10,7 +10,7 @@ type Snapshot = {
   note: string;
   lastCheckedAt: string | null;
 };
-type Release = {id:string;status:string;sourceSha:string|null;imageDigest:string|null;gitopsPrNumber:number|null;updatedAt:string};
+type Release = {id:string;status:string;versionLabel:string|null;releaseNotes:string|null;sourceSha:string|null;imageDigest:string|null;updatedAt:string};
 type ResponseData = { state: string; workflowId?: string; snapshot?: Snapshot; note?: string; error?: string;releases?:Release[] };
 export function CodingAgentPanel({ requirementId, appId }: { requirementId: string;appId:string }) {
   const [value,setValue] = useState<ResponseData|null>(null);
@@ -19,7 +19,7 @@ export function CodingAgentPanel({ requirementId, appId }: { requirementId: stri
   async function send(method: "GET"|"POST"|"PATCH", decision?: "APPROVE"|"REJECT"|"VERIFY_PR"|"START_TEST_RELEASE") {
     if (busy) return;
     if (decision==="APPROVE" && !confirm("确定按已展示方案启动云端 Coding Agent？编码后仍需独立 PR/CI 审核。")) return;
-    if (decision==="START_TEST_RELEASE" && !confirm("确认将此需求已验证的 PR 提交交付到 TEST？必须已人工晋级至 master 且保留提交历史，构建与 GitOps 发布仍需独立核验和审核。")) return;
+    if (decision==="START_TEST_RELEASE" && !confirm("确认将此需求的已验证代码构建并部署到 TEST？构建前将核验所选源码包含已审核的提交。")) return;
     setBusy(true);setError("");
     try {
       const r=await fetch("/api/requirements/"+requirementId+"/coding-task", {
@@ -65,9 +65,9 @@ export function CodingAgentPanel({ requirementId, appId }: { requirementId: stri
             onClick={()=>void send("PATCH","VERIFY_PR")}>通过 GitHub 核验 PR 与 CI</button>
         </div>}
         {value.snapshot.stage==="AWAITING_TEST_RELEASE"&&<div className="stack">
-          <p>编码 PR/CI 已确认。测试发布需要将包含该 PR 的代码人工晋级至 master，且 master 完整 CI 通过；系统会在构建前重新验证提交祖先关系。不会自动合并 PR 或发布生产。</p>
+          <p>编码 PR/CI 已确认。TEST 构建前将重新验证选定代码包含该提交，发布由 Kubernetes 直接执行。</p>
           <button type="button" disabled={busy||value.releases?.some(r=>r.status==="READY"||
-            ["REQUESTING","BUILDING","WAITING_PR","DEPLOYING","NEEDS_RECONCILIATION"].includes(r.status))}
+            ["REQUESTING","BUILDING","DEPLOYING","NEEDS_RECONCILIATION"].includes(r.status))}
             onClick={()=>void send("PATCH","START_TEST_RELEASE")}>部署此需求到 TEST</button>
         </div>}
         {value.snapshot.stage==="AWAITING_APPROVAL"&&<div className="actions">
@@ -78,16 +78,15 @@ export function CodingAgentPanel({ requirementId, appId }: { requirementId: stri
       {!!value.releases?.length&&<div className="stack">
         <h4>关联的 TEST 发布记录</h4>
         {value.releases.map(r=><article className="asset-row" key={r.id}>
-          <strong>{r.status}</strong> · <span className="muted">{new Date(r.updatedAt).toLocaleString("zh-CN")}</span>
+          <strong>{r.versionLabel??"未命名版本"} · {r.status}</strong> · <span className="muted">{new Date(r.updatedAt).toLocaleString("zh-CN")}</span>
+          {r.releaseNotes&&<p>{r.releaseNotes}</p>}
           {r.sourceSha&&<p>构建源码：<code>{r.sourceSha}</code></p>}
           {r.imageDigest&&<p>不可变镜像：<code>{r.imageDigest}</code></p>}
-          {r.gitopsPrNumber&&<a href={"https://github.com/NoName4Me/enterprise-app-marketplace/pull/"+r.gitopsPrNumber}
-            target="_blank" rel="noopener noreferrer">查看 GitOps 审核 PR #{r.gitopsPrNumber}</a>}
         </article>)}
         <a href={"/my/apps/"+appId+"?view=releases"}>查看应用完整发布记录 →</a>
       </div>}
       {value.note&&<p className="muted">{value.note}</p>}
-      <p className="muted">TEST READY 表示 Worker 已完成 Argo、镜像和 HTTP 验证；不代表已完成生产晋级、LAN 客户端或自动回滚验收。</p>
+      <p className="muted">TEST READY 表示 Worker 已完成 Kubernetes 镜像、Pod 和 HTTP 验证；不代表已完成生产晋级、LAN 客户端或自动回滚验收。</p>
     </div>}
   </section>;
 }
