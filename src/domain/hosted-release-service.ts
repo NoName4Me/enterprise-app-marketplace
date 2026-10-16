@@ -9,7 +9,6 @@ import {DELIVERY_QUEUE} from "@/temporal/contracts";
 import type {HostedReleaseInput,HostedReleaseSnapshot} from "@/temporal/hosted-contracts";
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const SOURCE_SHA=/^[a-f0-9]{40}$/;
 const VERSION=/^[^\x00-\x1f\x7f]{1,80}$/;
 const DIGEST=/^ghcr\.io\/[a-z0-9][a-z0-9_.-]*(?:\/[a-z0-9][a-z0-9_.-]*)+@sha256:[a-f0-9]{64}$/;
 const running=["REQUESTING","BUILDING","WAITING_PR","DEPLOYING","NEEDS_RECONCILIATION"] as const;
@@ -51,7 +50,8 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
   const versionLabel=options?.versionLabel??(linkage?"req-"+linkage.requirementId.slice(0,8):"");
   const releaseNotes=options?.releaseNotes??(linkage?"由需求 "+linkage.requirementId+" 触发的测试发布":"");
   if(environment==="TEST"&&(typeof sourceRef!=="string"||sourceRef.length>160||
-      /[\\u0000-\\u0020~^:?*\\[\\\\]/.test(sourceRef)||
+      Array.from(sourceRef).some(c=>c.charCodeAt(0)<=32||c.charCodeAt(0)===127)||
+      /[~^:?*]/.test(sourceRef)||sourceRef.includes("[")||sourceRef.includes("\\")||
       sourceRef.includes("..")||sourceRef.includes("//")||sourceRef.endsWith("/")||
       (typeof versionLabel!=="string")||!VERSION.test(versionLabel.trim())||
       typeof releaseNotes!=="string"||!releaseNotes.trim()||releaseNotes.trim().length>2000))

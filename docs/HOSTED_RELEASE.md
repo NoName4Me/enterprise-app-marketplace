@@ -78,3 +78,12 @@ kubectl get svc -A -o wide
 - 此轮没有启用自动审核 GitOps PR，也没有实现自动为任意仓库写入 CI 模板。测试发布自动审批应另设受约束策略，而不是取消现有 GitOps 来源校验。
 
 > 需求、审批、讨论、状态和结果以门户需求中心为准；GitHub 仅作为代码/PR 及当前 Actions 构建端，不要求创建 GitHub Issue。
+
+## 下一阶段（开发中）：TEST 版本标签与源码选择
+
+- 用户为 TEST 指定任意分支或完整 Commit SHA（仅在该应用已登记的仓库中解析），填写 **版本号、发布说明**；空分支代表仓库默认分支，Worker 在发布前固定为完整 SHA，构建模板 checkout 确切 SHA。
+- 新版模板将取消必须是 master HEAD 的限制，仍要求 Dockerfile、构建/容器冒烟测试以及与实际构建 Run 匹配的不可变 GHCR digest。**源仓库必须更新模板**，否则仍会因旧模板的 master 检查而失败；此 PR 不自动覆盖用户仓库工作流。
+- PRODUCTION 只能选择历史 TEST READY，界面优先显示版本号与说明，部署继续复用相同 digest，不允许选择外部不明镜像。
+- 门户构建日志必须配置 `HOSTED_GITHUB_LOG_TOKEN`（只读 Actions 权限），避免匿名 GitHub REST API 配额失败。缺少令牌时直接给出配置提示，不持续发起匿名轮询。
+- 增量 migration `0013_release_labels_and_issue_cleanup`：只增加发布元数据列并删除已废弃的 `requirements.github_issue_url`；**不删除需求、讨论、应用与历史发布记录**。源表升级前备份并验证。产品不再使用 GitHub Issues 管理需求。
+- **注意：当前这批代码尚未取消 GitOps PR！** 直接 Kubernetes 发布和原 Argo Application 安全移交是下一个独立切片，未完成前继续遵守旧发布链路，不得同时由 Argo 和门户修改相同 Deployment。

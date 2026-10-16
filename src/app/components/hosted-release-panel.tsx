@@ -6,6 +6,7 @@ import {HostedReleaseExecution} from "./hosted-release-execution";
 type Release={
   id:string;environment:"TEST"|"PRODUCTION";
   status:"REQUESTING"|"BUILDING"|"WAITING_PR"|"DEPLOYING"|"READY"|"FAILED"|"NEEDS_RECONCILIATION";
+  sourceRef:string|null;versionLabel:string|null;releaseNotes:string|null;
   sourceSha:string|null;buildRunId:string|null;
   imageDigest:string|null;gitopsPrNumber:number|null;
   note:string;createdAt:string;updatedAt:string;
@@ -34,6 +35,9 @@ export function HostedReleasePanel({root,repo,productionDigest}:{
   const [rows,setRows]=useState<Release[]>([]);
   const [busy,setBusy]=useState(false);
   const [selectedTestId,setSelectedTestId]=useState("");
+  const [sourceRef,setSourceRef]=useState("");
+  const [versionLabel,setVersionLabel]=useState("");
+  const [releaseNotes,setReleaseNotes]=useState("");
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const ledgerVersion=useRef<string|null>(null);
@@ -62,17 +66,21 @@ export function HostedReleasePanel({root,repo,productionDigest}:{
   const candidate=tested.find(r=>r.id===selectedTestId)??tested[0];
   async function trigger(environment:"TEST"|"PRODUCTION"){
     if(busy)return;
+    if(environment==="TEST"&&(!versionLabel.trim()||!releaseNotes.trim())){
+      setError("测试发布必须填写版本号和发布说明。");return;
+    }
     if(environment==="PRODUCTION"&&!confirm("确认将测试环境验证的完全相同镜像提交生产发布审批？正式流量变更需要 GitOps PR 人工审核。"))return;
     setBusy(true);setError("");
     try{
       const response=await fetch(root+"/hosted/releases",{
         method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify(environment==="PRODUCTION"?{environment,testedReleaseId:candidate?.id}:{environment})
+        body:JSON.stringify(environment==="PRODUCTION"?{environment,testedReleaseId:candidate?.id}:{environment,sourceRef:sourceRef.trim(),versionLabel:versionLabel.trim(),releaseNotes:releaseNotes.trim()})
       });
       if(!response.ok){
         const value=await response.json() as {error?:string};
         throw new Error(errorDescription(value.error??""));
       }
+      if(environment==="TEST"){setVersionLabel("");setReleaseNotes("");}
       await refresh();
       router.refresh();
     }catch(e){setError(e instanceof Error?e.message:"提交发布任务失败。");}
@@ -84,7 +92,19 @@ export function HostedReleasePanel({root,repo,productionDigest}:{
     <div className="release-action-grid">
       <div className="release-action">
         <strong>1. 构建并部署测试</strong>
-        <p>从 <code>{repo}</code> 的默认分支构建，得到 GHCR 不可变镜像后自动发起部署审核。</p>
+        <p>从 <code>{repo}</code> 的任意分支或 Commit 构建。首次留空则使用仓库默认分支。</p>
+        <label>分支或 Commit
+          <input type="text" maxLength={160} value={sourceRef} onChange={e=>setSourceRef(e.target.value)}
+            placeholder="例如 dev、feature/search 或完整 Commit SHA（留空＝默认分支）"/>
+        </label>
+        <label>版本号
+          <input type="text" required maxLength={80} value={versionLabel} onChange={e=>setVersionLabel(e.target.value)}
+            placeholder="例如 v0.2.0-beta.1"/>
+        </label>
+        <label>发布说明
+          <textarea required maxLength={2000} rows={3} value={releaseNotes} onChange={e=>setReleaseNotes(e.target.value)}
+            placeholder="本次修改了什么、修复了什么"/>
+        </label>
         <button type="button" disabled={busy||activeTest} onClick={()=>void trigger("TEST")}>
           {activeTest?"测试发布进行中":"部署到测试"}
         </button>
@@ -97,10 +117,11 @@ export function HostedReleasePanel({root,repo,productionDigest}:{
         {tested.length>0&&<label>选择已验证版本
           <select value={candidate?.id??""} onChange={e=>setSelectedTestId(e.target.value)}>
             {tested.map(r=><option key={r.id} value={r.id}>
-              {r.imageDigest?.slice(-16)} · {new Date(r.createdAt).toLocaleString("zh-CN")}
+              {r.versionLabel??"早期版本"} · {r.releaseNotes?.slice(0,52)??"无说明"} · {new Date(r.createdAt).toLocaleString("zh-CN")}
             </option>)}
           </select>
         </label>}
+        {candidate&&<p className="muted">当前选择：<strong>{candidate.versionLabel??"早期版本"}</strong><br/>{candidate.releaseNotes??"历史发布未填写说明"}</p>}
         <button type="button" disabled={busy||activeProd||!candidate?.imageDigest||
           candidate.imageDigest===productionDigest}
           onClick={()=>void trigger("PRODUCTION")}>
@@ -115,7 +136,9 @@ export function HostedReleasePanel({root,repo,productionDigest}:{
     {loading&&<p className="muted">读取中…</p>}
     {!loading&&!rows.length&&<p className="muted">暂无发布记录。首次使用需让仓库管理员完成标准 GitHub Actions 构建模板接入。</p>}
     <div className="hosted-release-history">{rows.map(r=><article key={r.id} className="workbench-item">
-      <div><strong>{r.environment==="TEST"?"测试环境":"生产环境"} · {labels[r.status]}</strong>
+      <div><strong>{r.versionLabel??"早期版本"} · {r.environment==="TEST"?"测试环境":"生产环境"} · {labels[r.status]}</strong>
+        {r.releaseNotes&&<p className="pre-wrap">{r.releaseNotes}</p>}
+        <p className="muted">源码：{r.sourceRef??"未记录"} · {r.sourceSha?.slice(0,12)??"未确认 SHA"}</p>
         <p className="muted">{r.note||"等待任务反馈"}</p>
         <p className="muted">{new Date(r.createdAt).toLocaleString("zh-CN")}</p>
         <div className="actions">
