@@ -99,7 +99,7 @@ jobs:
         run: pnpm test:db
       - name: Verify P5 to P4 provenance gates (PR)
         if: github.event_name == 'pull_request'
-        run: pnpm exec vitest run src/temporal/activities.test.ts src/temporal/hosted-proof.test.ts tests/hosted-dispatch.test.ts
+        run: pnpm exec vitest run src/temporal/activities.test.ts src/temporal/hosted-proof.test.ts tests/hosted-dispatch.test.ts tests/hosted-log-policy.test.ts
       - name: Fast required gate - typecheck lint build
         run: |
           node --test scripts/p4-open-promotion.test.mjs scripts/p4-hosted-manifest.test.mjs lab/test-service/server.test.mjs
