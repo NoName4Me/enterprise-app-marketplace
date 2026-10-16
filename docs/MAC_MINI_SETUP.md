@@ -304,4 +304,4 @@ pnpm demo:cleanup           # 结果应显示 0 个匹配
 
 ## 托管应用真正发布的增量配置（0011）
 
-**这不是重新安装指南。** 新版发布由 [HOSTED_RELEASE.md](HOSTED_RELEASE.md) 说明，需源仓库管理员安装构建 Workflow 模板、更新已有门户与 Worker 的 Kubernetes Secrets、更新 Worker ARM64 镜像，在 `market` 备份后仅执行新的 `0011` 迁移。初次通用发布还需要经 GitHub 人工批准 GitOps PR；验证 Argo 与 LAN NodePort，不能通过 CI 结果代替现场核验。项目的 PostgreSQL/Temporal/Argo/K8s 实例和所有现有卷**不重建、不清空**。
+**这不是重新安装指南。** 新版发布由 [HOSTED_RELEASE.md](HOSTED_RELEASE.md) 说明，需源仓库管理员安装构建 Workflow 模板、更新已有门户与 Worker 的 Kubernetes Secrets、更新 Worker ARM64 镜像，在 `market` 备份后仅执行新的 `0011` 迁移。**后续 P5→P4 TEST 关联另需增量执行 `0012_delivery_release_link`，先在隔离库校验后再迁移已有 market；不要重跑 0000–0011 或重建基础组件。**初次通用发布还需要经 GitHub 人工批准 GitOps PR；验证 Argo 与 LAN NodePort，不能通过 CI 结果代替现场核验。项目的 PostgreSQL/Temporal/Argo/K8s 实例和所有现有卷**不重建、不清空**。
