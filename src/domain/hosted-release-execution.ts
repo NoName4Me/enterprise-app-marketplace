@@ -5,6 +5,7 @@ import type {Actor} from "./actor";
 import {AppError} from "./app-errors";
 import {inspectHostedRelease} from "./hosted-release-service";
 import {allowedHostedLogLocation} from "./hosted-log-policy";
+import {getArgoOverview} from "./argocd-overview";
 
 const REPO=/^[a-zA-Z0-9-]{1,39}\/[a-zA-Z0-9_.-]{1,100}$/;
 const JOB=/^[1-9][0-9]{0,18}$/;
@@ -68,8 +69,11 @@ async function jobsFor(repo:string,runId:string|null):Promise<ReadResult>{
 }
 export async function getHostedExecution(actor:Actor|null,appId:string,releaseId:string){
   const {release,snapshot,repo}=await context(actor,appId,releaseId);
-  const build=await jobsFor(repo,release.buildRunId);
-  return {release,snapshot,build,observedAt:new Date().toISOString()};
+  const [build,argo]=await Promise.all([jobsFor(repo,release.buildRunId),
+    getArgoOverview(actor,appId)]);
+  const deployed=argo.applications.filter(item=>item.environmentKey.toLowerCase()===release.environment.toLowerCase());
+  return {release,snapshot,build,deployment:{source:argo.source,state:argo.state,applications:deployed},
+    observedAt:new Date().toISOString()};
 }
 async function boundedText(response:Response){
   const reader=response.body?.getReader();
