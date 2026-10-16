@@ -62,7 +62,7 @@ export async function readHostedRuntime(actor:Actor|null,appId:string,environmen
     .from(applications).where(eq(applications.id,appId)).limit(1);
   if(!app||app.owner!==user.id)throw new AppError(404,"not_found");
   if(app.kind!=="HOSTED")throw new AppError(422,"external_app_not_hosted");
-  const [[registered],[port],[latest]] = await Promise.all([
+  const [[registered],[port],releaseHistory] = await Promise.all([
     db.select({id:appEnvironments.id}).from(appEnvironments).where(and(
       eq(appEnvironments.appId,appId),eq(appEnvironments.purpose,environment))).limit(1),
     db.select({nodePort:appHostedPorts.nodePort,state:appHostedPorts.state,
@@ -75,14 +75,20 @@ export async function readHostedRuntime(actor:Actor|null,appId:string,environmen
       createdAt:hostedReleases.createdAt,note:hostedReleases.note})
       .from(hostedReleases).where(and(eq(hostedReleases.appId,appId),
         eq(hostedReleases.environment,environment)))
-      .orderBy(desc(hostedReleases.createdAt)).limit(1)
+      .orderBy(desc(hostedReleases.createdAt)).limit(30)
   ]);
+  const latest=releaseHistory[0];
+  // The most recent attempt can fail while the previous tested image is still live.
+  // Show the version associated with the verified running digest instead of the failed attempt.
+  const active=releaseHistory.find(item=>item.status==="READY"&&
+    !!port?.imageDigest&&item.imageDigest===port.imageDigest);
   const observedAt=new Date().toISOString();
   const ns="hosted-"+appId.replaceAll("-","")+"-"+environment.toLowerCase();
   const base={environment,namespace:ns,observedAt,port:port?.nodePort??null,
     verifiedDigest:port?.imageDigest??null,
     verifiedAt:port?.verifiedAt??null,
-    release:latest??null,accessUrl:null as string|null};
+    release:active??latest??null,latestAttempt:latest?.status??null,
+    accessUrl:null as string|null};
   if(!registered||!port)return {...base,state:"NOT_DEPLOYED" as HostedRuntimeState,
     reason:"该应用尚未初始化此环境",workload:null,httpReachable:null};
   if(!latest&&port.state==="RESERVED")return {...base,state:"NOT_DEPLOYED" as HostedRuntimeState,
