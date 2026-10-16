@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: ghcr.io/noname4me/marketplace-e2e-web@sha256:75ef557bf17e5fcb30471980b4632385bdb1cb47b035ec34a8ced3b855843b7d
+          image: ghcr.io/noname4me/marketplace-e2e-web@sha256:7e463b0d6995e82a28d6dde75a0f4bf07885442f2701b54e8e20c29181cde648
           ports:
             - containerPort: 8080
               name: http
