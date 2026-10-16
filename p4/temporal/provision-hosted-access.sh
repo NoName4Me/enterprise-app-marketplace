@@ -14,6 +14,11 @@ UUID='^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
 ENVIRONMENT_LOWER=$(printf '%s' "$ENVIRONMENT" | tr '[:upper:]' '[:lower:]')
 NAMESPACE="hosted-${APP_ID//-/}-${ENVIRONMENT_LOWER}"
 kubectl create serviceaccount portal-hosted-worker -n marketplace --dry-run=client -o yaml | kubectl apply -f -
+# The Portal reads only namespace identity and current deployment/service status.
+kubectl create serviceaccount portal-hosted-reader -n marketplace --dry-run=client -o yaml | kubectl apply -f -
+kubectl create clusterrole portal-hosted-namespace-reader --verb=get --resource=namespaces --dry-run=client -o yaml | kubectl apply -f -
+kubectl create clusterrolebinding portal-hosted-namespace-reader --clusterrole=portal-hosted-namespace-reader \
+  --serviceaccount=marketplace:portal-hosted-reader --dry-run=client -o yaml | kubectl apply -f -
 kubectl create clusterrole portal-hosted-namespace-reader --verb=get --resource=namespaces --dry-run=client -o yaml | kubectl apply -f -
 kubectl create clusterrolebinding portal-hosted-namespace-reader --clusterrole=portal-hosted-namespace-reader \
   --serviceaccount=marketplace:portal-hosted-worker --dry-run=client -o yaml | kubectl apply -f -
@@ -37,4 +42,11 @@ kubectl -n "$NAMESPACE" create rolebinding portal-hosted-deployer \
   --role=portal-hosted-deployer \
   --serviceaccount=marketplace:portal-hosted-worker \
   --dry-run=client -o yaml | kubectl apply -f -
-echo "Provisioned scoped rights: $NAMESPACE (workloads unchanged)"
+
+kubectl -n "$NAMESPACE" create role portal-hosted-runtime-reader \
+  --verb=get --resource=deployments.apps,services --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n "$NAMESPACE" create rolebinding portal-hosted-runtime-reader \
+  --role=portal-hosted-runtime-reader \
+  --serviceaccount=marketplace:portal-hosted-reader \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo "Provisioned deploy + read-only runtime rights: $NAMESPACE (workloads unchanged)"

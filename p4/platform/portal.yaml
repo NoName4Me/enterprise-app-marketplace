@@ -1,3 +1,9 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: portal-hosted-reader
+  namespace: marketplace
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,6 +21,7 @@ spec:
       labels:
         app.kubernetes.io/name: marketplace-portal
     spec:
+      serviceAccountName: portal-hosted-reader
       containers:
         - name: portal
           image: marketplace/portal:dev

@@ -10,6 +10,7 @@ import { statusName } from "@/lib/marketplace-labels";
 import { AssetWorkspace } from "@/app/components/asset-workspace";
 import { GithubLivePanel } from "@/app/components/github-live-panel";
 import { DevopsEvidencePanel } from "@/app/components/devops-evidence-panel";
+import { HostedRuntimePanel } from "@/app/components/hosted-runtime-panel";
 import { ApplicationForm } from "../application-form";
 import { RevisionAction } from "../revision-action";
 import { DeleteDraftButton } from "../delete-draft-button";
@@ -94,7 +95,7 @@ export default async function ManagedApplication({params,searchParams}:{
   </div>}
   {view==="operations"&&<div className="stack">
     {!hosted&&<p className="notice">外部应用尚未接入平台托管监控；仅在明确绑定观测来源后提供诊断。</p>}
-    <DevopsEvidencePanel root={root} appId={id}/>
+    {hosted?<HostedRuntimePanel root={root}/>:<DevopsEvidencePanel root={root} appId={id}/>}
   </div>}
   {view==="requirements"&&<section className="card">
     <h3>需求与改进</h3><p>从应用工作台提出问题，需求会自动关联该应用，之后可由负责人跟踪 AI 分析、编码任务和 PR 审核。</p>
