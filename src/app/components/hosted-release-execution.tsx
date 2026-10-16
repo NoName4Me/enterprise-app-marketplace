@@ -79,9 +79,9 @@ export function HostedReleaseExecution({root,release}:{root:string;release:Relea
   },[endpoint]);
   useEffect(()=>{
     if(!expanded)return;
-    void refresh();
+    const initial=setTimeout(()=>{void refresh();},0);
     const timer=setInterval(()=>{void refresh();},8000);
-    return ()=>clearInterval(timer);
+    return ()=>{clearTimeout(initial);clearInterval(timer);};
   },[expanded,refresh]);
   async function fetchLog(jobId:number){
     const key=String(jobId);
