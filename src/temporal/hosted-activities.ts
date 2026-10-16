@@ -3,7 +3,7 @@ import {db} from "../db/client";
 import {hostedReleases,appHostedPorts} from "../db/schema";
 import type {HostedReleaseInput,HostedReleaseSnapshot,ExternalAction,BuildProgress,GitopsResult} from "./hosted-contracts";
 import {renderHostedManifest} from "../../scripts/p4-hosted-manifest.mjs";
-import {trustedRun,trustedBuildImage} from "./hosted-proof";
+import {trustedRun,trustedBuildImage,trustedMergeAncestry} from "./hosted-proof";
 
 const githubApi="https://api.github.com";
 const gitopsRepo="NoName4Me/enterprise-app-marketplace";
@@ -90,6 +90,16 @@ export async function dispatchHostedBuild(input:HostedReleaseInput):Promise<Exte
     if(!head.ok)return {kind:"REJECTED",reason:"无法确认默认分支 SHA"};
     const sha=str(value((await json(head)).commit).sha);
     if(!SHA.test(sha))return {kind:"REJECTED",reason:"代码 Commit 无效"};
+    if(input.requiredMergeSha){
+      // The standard GHCR template publishes current master only. A dev PR is NOT
+      // proof of deployable master code; check ancestry before dispatching anything.
+      if(branch!=="master"||!SHA.test(input.requiredMergeSha))
+        return {kind:"REJECTED",reason:"需求交付必须晋级到可信 master 后才能发布 TEST"};
+      const compare=await gh("/repos/"+input.repository+"/compare/"+
+        input.requiredMergeSha+"..."+sha,access);
+      if(!compare.ok||!trustedMergeAncestry(await json(compare),input.requiredMergeSha,sha))
+        return {kind:"REJECTED",reason:"已审核需求的 PR 合并 SHA 不属于当前 master 历史；请先人工晋级并保留提交祖先关系"};
+    }
     const wf=await gh("/repos/"+input.repository+"/actions/workflows/marketplace-build.yml",access);
     if(!wf.ok)return {kind:"REJECTED",reason:"源仓库尚未安装 marketplace-build.yml 标准构建工作流"};
     dispatchStarted=true;
