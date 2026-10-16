@@ -57,6 +57,7 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
       typeof releaseNotes!=="string"||!releaseNotes.trim()||releaseNotes.trim().length>2000))
     throw new AppError(422,"invalid_release_metadata");
   if(linkage&&sourceRef)throw new AppError(422,"linked_release_source_must_be_derived");
+  const selectedRef=typeof sourceRef==="string"?sourceRef:"";
   const user=await authorizeActor(actor,"create");
   validateId(appId);
   if(environment!=="TEST"&&environment!=="PRODUCTION")
@@ -115,13 +116,13 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
     const releaseId=randomUUID(),workflowId="hosted-release-"+releaseId;
     await tx.insert(hostedReleases).values({id:releaseId,appId,requestedBy:user.id,
       requirementId:linkage?.requirementId,
-      sourceRef:environment==="TEST"?(sourceRef||"default"):prodMeta?.sourceRef,
+      sourceRef:environment==="TEST"?(selectedRef||"default"):prodMeta?.sourceRef,
       versionLabel:environment==="TEST"?String(versionLabel).trim():prodMeta?.versionLabel,
       releaseNotes:environment==="TEST"?String(releaseNotes).trim():prodMeta?.releaseNotes,
       environment,workflowId,note:"已受理发布请求，等待 Temporal"});
     const input:HostedReleaseInput={releaseId,appId,environment,environmentId:env.id,
       nodePort:port.nodePort,repository:app.sourceRepository,imageDigest,
-      requiredMergeSha:linkage?.requiredMergeSha,sourceRef:environment==="TEST"?(sourceRef||undefined):undefined};
+      requiredMergeSha:linkage?.requiredMergeSha,sourceRef:environment==="TEST"?(selectedRef||undefined):undefined};
     return {input,workflowId};
   });
   // A timeout can happen AFTER the Temporal server accepted the start.
