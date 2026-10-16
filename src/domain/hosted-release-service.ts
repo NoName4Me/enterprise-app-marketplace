@@ -35,6 +35,7 @@ export async function listHostedReleases(actor:Actor|null,appId:string){
     .where(eq(hostedReleases.appId,appId)).orderBy(desc(hostedReleases.createdAt)).limit(30);
   return {releases:rows.map(r=>({
     id:r.id,environment:r.environment,requirementId:r.requirementId,status:r.status,
+    deployDriver:r.deployDriver,
     sourceRef:r.sourceRef,versionLabel:r.versionLabel,releaseNotes:r.releaseNotes,sourceSha:r.sourceSha,
     buildRunId:r.buildRunId,imageDigest:r.imageDigest,gitopsPrNumber:r.gitopsPrNumber,
     note:r.note,createdAt:r.createdAt,updatedAt:r.updatedAt
@@ -58,6 +59,7 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
     throw new AppError(422,"invalid_release_metadata");
   if(linkage&&sourceRef)throw new AppError(422,"linked_release_source_must_be_derived");
   const selectedRef=typeof sourceRef==="string"?sourceRef:"";
+  const driver=process.env.HOSTED_DEPLOY_DRIVER==="kubernetes"?"KUBERNETES":"GITOPS";
   const user=await authorizeActor(actor,"create");
   validateId(appId);
   if(environment!=="TEST"&&environment!=="PRODUCTION")
@@ -119,7 +121,7 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
       sourceRef:environment==="TEST"?(selectedRef||"default"):prodMeta?.sourceRef,
       versionLabel:environment==="TEST"?String(versionLabel).trim():prodMeta?.versionLabel,
       releaseNotes:environment==="TEST"?String(releaseNotes).trim():prodMeta?.releaseNotes,
-      environment,workflowId,note:"已受理发布请求，等待 Temporal"});
+      environment,deployDriver:driver,workflowId,note:"已受理发布请求，等待 Temporal"});
     const input:HostedReleaseInput={releaseId,appId,environment,environmentId:env.id,
       nodePort:port.nodePort,repository:app.sourceRepository,imageDigest,
       requiredMergeSha:linkage?.requiredMergeSha,sourceRef:environment==="TEST"?(selectedRef||undefined):undefined};
@@ -129,7 +131,10 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
   // Keep the unique release row and demand operator reconciliation, never dispatch twice.
   try{
     await withClient(async client=>{
-      await client.start(linkage?"verifiedHostedReleaseWorkflow":"hostedReleaseWorkflow",{
+      const name=driver==="KUBERNETES"
+        ?(linkage?"verifiedDirectHostedReleaseWorkflow":"directHostedReleaseWorkflow")
+        :(linkage?"verifiedHostedReleaseWorkflow":"hostedReleaseWorkflow");
+      await client.start(name,{
         workflowId:current.workflowId,taskQueue:DELIVERY_QUEUE,args:[current.input],
         workflowIdReusePolicy:"REJECT_DUPLICATE",workflowIdConflictPolicy:"FAIL"
       });
