@@ -11,7 +11,8 @@ ENVIRONMENT="$3"
 UUID='^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
 [[ "$APP_ID" =~ $UUID && "$ENV_ID" =~ $UUID ]] || { echo "Invalid UUID" >&2; exit 2; }
 [[ "$ENVIRONMENT" == TEST || "$ENVIRONMENT" == PRODUCTION ]] || { echo "Invalid environment" >&2; exit 2; }
-NAMESPACE="hosted-${APP_ID//-/}-${ENVIRONMENT,,}"
+ENVIRONMENT_LOWER=$(printf '%s' "$ENVIRONMENT" | tr '[:upper:]' '[:lower:]')
+NAMESPACE="hosted-${APP_ID//-/}-${ENVIRONMENT_LOWER}"
 kubectl create serviceaccount portal-hosted-worker -n marketplace --dry-run=client -o yaml | kubectl apply -f -
 kubectl create clusterrole portal-hosted-namespace-reader --verb=get --resource=namespaces --dry-run=client -o yaml | kubectl apply -f -
 kubectl create clusterrolebinding portal-hosted-namespace-reader --clusterrole=portal-hosted-namespace-reader \
