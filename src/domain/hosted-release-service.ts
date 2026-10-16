@@ -2,7 +2,7 @@ import {Connection,WorkflowClient} from "@temporalio/client";
 import {and,desc,eq,inArray} from "drizzle-orm";
 import {randomUUID} from "node:crypto";
 import {db} from "@/db/client";
-import {applications,appEnvironments,appHostedPorts,hostedReleases} from "@/db/schema";
+import {applications,appEnvironments,appHostedPorts,hostedReleases,requirements} from "@/db/schema";
 import {authorizeActor,type Actor} from "./actor";
 import {AppError} from "./app-errors";
 import {DELIVERY_QUEUE} from "@/temporal/contracts";
@@ -33,12 +33,16 @@ export async function listHostedReleases(actor:Actor|null,appId:string){
   const rows=await db.select().from(hostedReleases)
     .where(eq(hostedReleases.appId,appId)).orderBy(desc(hostedReleases.createdAt)).limit(30);
   return {releases:rows.map(r=>({
-    id:r.id,environment:r.environment,status:r.status,sourceSha:r.sourceSha,
+    id:r.id,environment:r.environment,requirementId:r.requirementId,status:r.status,sourceSha:r.sourceSha,
     buildRunId:r.buildRunId,imageDigest:r.imageDigest,gitopsPrNumber:r.gitopsPrNumber,
     note:r.note,createdAt:r.createdAt,updatedAt:r.updatedAt
   }))};
 }
-export async function startHostedRelease(actor:Actor|null,appId:string,environment:unknown,testedReleaseId:unknown=null){
+export async function startHostedRelease(actor:Actor|null,appId:string,environment:unknown,testedReleaseId:unknown=null,
+  linkage?:{requirementId:string;requiredMergeSha:string;repository:string}){
+  if(linkage && (environment!=="TEST"||!UUID.test(linkage.requirementId)||
+    !/^[a-f0-9]{40}$/.test(linkage.requiredMergeSha)))
+    throw new AppError(422,"invalid_delivery_release_link");
   const user=await authorizeActor(actor,"create");
   validateId(appId);
   if(environment!=="TEST"&&environment!=="PRODUCTION")
@@ -54,6 +58,13 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
     if(app.sourceKind!=="HOSTED"||!app.sourceRepository||app.lifecycleStatus==="RETIRED")
       throw new AppError(422,"not_deployable");
     if(!allowedRepo(app.sourceRepository))throw new AppError(403,"hosted_repository_not_allowed");
+    if(linkage){
+      if(app.sourceRepository.toLowerCase()!==linkage.repository.toLowerCase())
+        throw new AppError(409,"delivery_repository_changed");
+      const [req]=await tx.select({appId:requirements.appId}).from(requirements)
+        .where(eq(requirements.id,linkage.requirementId)).limit(1);
+      if(!req||req.appId!==appId)throw new AppError(422,"invalid_delivery_release_link");
+    }
     const active=await tx.select({id:hostedReleases.id}).from(hostedReleases)
       .where(and(eq(hostedReleases.appId,appId),
         eq(hostedReleases.environment,environment),
@@ -86,16 +97,18 @@ export async function startHostedRelease(actor:Actor|null,appId:string,environme
     }
     const releaseId=randomUUID(),workflowId="hosted-release-"+releaseId;
     await tx.insert(hostedReleases).values({id:releaseId,appId,requestedBy:user.id,
+      requirementId:linkage?.requirementId,
       environment,workflowId,note:"已受理发布请求，等待 Temporal"});
     const input:HostedReleaseInput={releaseId,appId,environment,environmentId:env.id,
-      nodePort:port.nodePort,repository:app.sourceRepository,imageDigest};
+      nodePort:port.nodePort,repository:app.sourceRepository,imageDigest,
+      requiredMergeSha:linkage?.requiredMergeSha};
     return {input,workflowId};
   });
   // A timeout can happen AFTER the Temporal server accepted the start.
   // Keep the unique release row and demand operator reconciliation, never dispatch twice.
   try{
     await withClient(async client=>{
-      await client.start("hostedReleaseWorkflow",{
+      await client.start(linkage?"verifiedHostedReleaseWorkflow":"hostedReleaseWorkflow",{
         workflowId:current.workflowId,taskQueue:DELIVERY_QUEUE,args:[current.input],
         workflowIdReusePolicy:"REJECT_DUPLICATE",workflowIdConflictPolicy:"FAIL"
       });

@@ -14,6 +14,13 @@ const {recordHostedRelease}=proxyActivities<Pick<typeof hosted,"recordHostedRele
   startToCloseTimeout:"15 seconds",retry:{maximumAttempts:5}
 });
 
+/** Versioned task type: an older worker must not run a linked release without the ancestry gate. */
+export async function verifiedHostedReleaseWorkflow(input:HostedReleaseInput):Promise<HostedReleaseSnapshot>{
+  if(input.environment!=="TEST"||!/^[a-f0-9]{40}$/.test(input.requiredMergeSha??""))
+    throw new Error("verified_handoff_required");
+  return hostedReleaseWorkflow(input);
+}
+
 export async function hostedReleaseWorkflow(input:HostedReleaseInput):Promise<HostedReleaseSnapshot>{
   let state:HostedReleaseSnapshot={releaseId:input.releaseId,stage:"QUEUED",note:"等待持久任务",
     sourceSha:null,buildRunId:null,imageDigest:input.imageDigest??null,

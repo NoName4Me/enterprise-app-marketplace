@@ -30,6 +30,6 @@ export default async function RequirementDetail({params}:{params:Promise<{id:str
       {item.comments.map(c=><article key={c.id} className="asset-row"><strong>{c.authorName}</strong>
         <p className="muted">{new Date(c.at).toLocaleString("zh-CN")}</p><p className="pre-wrap">{c.body}</p></article>)}
     </section>
-    {item.canManage&&item.appId&&<CodingAgentPanel requirementId={id}/>}
+    {item.canManage&&item.appId&&<CodingAgentPanel requirementId={id} appId={item.appId}/>}
   </SiteNav>;
 }

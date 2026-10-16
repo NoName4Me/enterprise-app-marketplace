@@ -364,6 +364,7 @@ export const hostedReleases = pgTable("hosted_releases", {
   id: uuid("id").defaultRandom().primaryKey(),
   appId: uuid("app_id").notNull().references(() => applications.id, {onDelete:"restrict"}),
   environment: text("environment", {enum:["TEST","PRODUCTION"]}).notNull(),
+  requirementId: uuid("requirement_id").references(() => requirements.id, {onDelete:"restrict"}),
   requestedBy: text("requested_by").notNull().references(() => user.id, {onDelete:"restrict"}),
   status: text("status", {enum:["REQUESTING","BUILDING","WAITING_PR","DEPLOYING","READY","FAILED","NEEDS_RECONCILIATION"]}).notNull().default("REQUESTING"),
   workflowId: text("workflow_id").notNull().unique(),
@@ -374,6 +375,7 @@ export const hostedReleases = pgTable("hosted_releases", {
   updatedAt: timestamp("updated_at", {withTimezone:true}).defaultNow().notNull(),
 }, t => [
   index("hosted_releases_app_created_idx").on(t.appId,t.createdAt),
+  index("hosted_releases_requirement_idx").on(t.requirementId,t.createdAt),
   check("hosted_releases_environment_check", sql`${t.environment} IN ('TEST','PRODUCTION')`),
   check("hosted_releases_status_check", sql`${t.status} IN ('REQUESTING','BUILDING','WAITING_PR','DEPLOYING','READY','FAILED','NEEDS_RECONCILIATION')`),
 ]);

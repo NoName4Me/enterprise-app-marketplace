@@ -46,5 +46,6 @@ describe("P5 Temporal GitHub PR and CI gate", () => {
     const result = await verifyMergedPullRequest(repo, 7, requirementId);
     expect(result.verified).toBe(true);
     expect(result.url).toBe("https://github.com/Example/repo/pull/7");
+    expect(result.mergeSha).toBe("a".repeat(40));
   });
 });
