@@ -1,0 +1,121 @@
+# Install as .github/workflows/marketplace-build.yml in each HOSTED source repo.
+# No self-hosted runner or local Mac secrets. Dockerfile required at repo root.
+name: Portal - Build immutable GHCR image
+on:
+  workflow_dispatch:
+    inputs:
+      app_id:
+        required: true
+        description: Platform application UUID
+        type: string
+      source_sha:
+        required: true
+        description: Immutable source commit SHA
+        type: string
+permissions:
+  contents: read
+  actions: read
+  packages: write
+  deployments: write
+concurrency:
+  group: portal-build-${{ inputs.app_id }}-${{ inputs.source_sha }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - name: Validate inputs and source identity
+        env:
+          APP_ID: ${{ inputs.app_id }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$APP_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -f Dockerfile
+      # TEST may build any commit in the registered repository. The workflow checks out source_sha
+      # exactly and performs the build + smoke test before emitting a trusted digest.
+      - name: Prepare lowercase GHCR coordinates
+        id: meta
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          echo "image=ghcr.io/${REPO,,}" >> "$GITHUB_OUTPUT"
+          echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
+      - uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Build, tag and push ARM64 image
+        id: image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.image }}:portal-${{ inputs.app_id }}-${{ inputs.source_sha }}
+          build-args: |
+            BUILD_SHA=${{ inputs.source_sha }}
+            BUILD_TIME=${{ steps.meta.outputs.built_at }}
+          provenance: true
+      - name: Smoke-test the published container before it is eligible to deploy
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/${REPO,,}@${IMAGE_DIGEST}"
+          docker run --platform linux/arm64 -d --name marketplace-smoke \
+            -p 127.0.0.1:18080:8080 "$IMAGE"
+          trap 'docker rm -f marketplace-smoke >/dev/null 2>&1 || true' EXIT
+          READY=0
+          for attempt in $(seq 1 24); do
+            if curl -fsS --max-time 3 http://127.0.0.1:18080/ >/dev/null; then
+              READY=1
+              break
+            fi
+            sleep 5
+          done
+          test "$READY" = "1"
+      - name: Record immutable image identity for the Portal
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          APP_ID: ${{ inputs.app_id }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          IMAGE="ghcr.io/${REPO,,}@${IMAGE_DIGEST}"
+          export IMAGE
+          node - <<'NODE'
+          const body={
+            ref:process.env.SOURCE_SHA,
+            environment:"marketplace-build-artifact",
+            auto_merge:false,required_contexts:[],
+            transient_environment:true,
+            payload:{app_id:process.env.APP_ID,source_sha:process.env.SOURCE_SHA,
+              image:process.env.IMAGE,workflow_run_id:Number(process.env.RUN_ID)}
+          };
+          fetch("https://api.github.com/repos/"+process.env.REPO+"/deployments",{
+            method:"POST",headers:{
+              Authorization:"Bearer "+process.env.GITHUB_TOKEN,
+              Accept:"application/vnd.github+json",
+              "X-GitHub-Api-Version":"2026-03-10",
+              "Content-Type":"application/json"
+            },body:JSON.stringify(body)
+          }).then(async r=>{
+            if(r.status!==201)throw new Error("Failed to write trusted build identity: "+r.status);
+          }).catch(e=>{console.error(e);process.exitCode=1});
+          NODE

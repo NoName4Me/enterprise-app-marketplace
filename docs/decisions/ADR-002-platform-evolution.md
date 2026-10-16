@@ -1,8 +1,10 @@
 # ADR-002：企业应用治理与 AI 自动化运维平台演进
 
+> 2026-10-14 更新：PR 采用轻量检查，master 保留完整回归；实验镜像发布改成手动且须验证受信 master 完整 CI（见 [DEVELOPMENT](../DEVELOPMENT.md)）。
+
 - 日期：2026-10-13
 - 状态：**已确认目标架构原则；具体第三方凭据、流程框架和权限实现方案待各阶段 Spike/ADR 决定**
-- 关联：[ADR-001 原 MVP 技术基线](ADR-001-technical-baseline.md)、[路线图](../ROADMAP.md)、[环境](../engineering/MAC_MINI_LAB.md)
+- 关联：[ADR-001 原 MVP 技术基线](ADR-001-technical-baseline.md)、[路线图](../ROADMAP.md)、[环境](../DEVELOPMENT.md)
 
 ## 决策背景
 

@@ -58,3 +58,21 @@ export function validateContent(
   }
   return updated;
 }
+
+export type ApplicationSource = {
+  sourceKind: "EXTERNAL" | "HOSTED";
+  sourceRepository: string | null;
+};
+export function validateApplicationSource(fields: Record<string, unknown>): ApplicationSource {
+  const kind=fields.sourceKind ?? "EXTERNAL";
+  if(kind !== "EXTERNAL" && kind !== "HOSTED") throw new AppError(422,"invalid_source_kind");
+  const repo=fields.sourceRepository;
+  if(kind==="EXTERNAL") {
+    if(repo!==undefined&&repo!==null&&repo!=="")throw new AppError(422,"external_repository_not_allowed");
+    return {sourceKind:"EXTERNAL",sourceRepository:null};
+  }
+  if(typeof repo!=="string"||!/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9_.-]{1,100}$/.test(repo)||
+      repo.split("/")[1]==="."||repo.split("/")[1]==="..")
+    throw new AppError(422,"invalid_repository");
+  return {sourceKind:"HOSTED",sourceRepository:repo.toLowerCase()};
+}

@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: marketplace-lab
+  namespace: monitoring
+  labels:
+    release: monitor
+spec:
+  namespaceSelector:
+    matchNames: [marketplace-lab]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: marketplace-lab-active
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

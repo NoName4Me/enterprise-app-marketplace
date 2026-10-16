@@ -15,9 +15,12 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "demo:seed": "node scripts/run-demo.mjs",
     "test:db": "vitest run --config vitest.db.config.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "temporal:worker": "tsx src/temporal/worker.ts",
+    "temporal:check": "tsc --noEmit",
+    "temporal:bundle": "tsx src/temporal/bundle-check.ts",
+    "demo:cleanup": "tsx scripts/cleanup-seeded-apps.ts"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.7.6",
@@ -27,7 +30,10 @@
     "next": "16.3.8",
     "pg": "8.16.3",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "@temporalio/client": "1.24.0",
+    "@temporalio/workflow": "1.24.0",
+    "@temporalio/worker": "1.24.0"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",
@@ -40,6 +46,7 @@
     "eslint": "^9.25.0",
     "eslint-config-next": "16.3.8",
     "typescript": "^5.9.0",
-    "vitest": "^4.0.0"
+    "vitest": "^4.0.0",
+    "tsx": "4.23.15"
   }
 }

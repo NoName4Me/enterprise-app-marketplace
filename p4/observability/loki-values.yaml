@@ -1,0 +1,43 @@
+# Single-node OrbStack; verified with grafana-community/loki chart 18.15.1.
+deploymentMode: Monolithic
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  storage:
+    type: filesystem
+  limits_config:
+    retention_period: 48h
+singleBinary:
+  replicas: 1
+  resources:
+    requests:
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  persistence:
+    enabled: true
+    size: 3Gi
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+minio:
+  enabled: false
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+gateway:
+  enabled: true

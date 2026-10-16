@@ -3,7 +3,7 @@ on:
   push:
     branches: [master]
   pull_request:
-    branches: [master]
+    branches: [master, dev]
 
 permissions:
   contents: read
@@ -35,41 +35,83 @@ jobs:
         with: { node-version: "22" }
       - name: Install with locked dependencies
         run: pnpm install --frozen-lockfile
-      - name: Audit production dependencies (block high and critical)
+      # Fast PR checks; complete checks remain on master push.
+      - name: Audit production dependencies (master)
+        if: github.event_name == 'push'
         run: pnpm audit --prod --audit-level=high --registry=https://registry.npmjs.org
-      - name: Generate and apply migration
+      - name: Generate migration reference (master)
+        if: github.event_name == 'push'
+        run: pnpm db:generate
+      - name: Apply migration to isolated test database
+        run: pnpm db:migrate
+      - name: Verify initial draft deletion on isolated PostgreSQL (PR)
+        if: github.event_name == 'pull_request'
+        run: pnpm exec vitest run --config vitest.db.config.ts tests/delete-draft.integration.test.ts
+      - name: Verify P3/P5 migration metadata has no schema drift (PR)
+        if: github.event_name == 'pull_request'
         run: |
           pnpm db:generate
-          pnpm db:migrate
+          git diff --exit-code -- drizzle/
+          test -z "$(git ls-files --others --exclude-standard drizzle/)"
+      - name: Validate Temporal/OrbStack deployment contract (PR)
+        if: github.event_name == 'pull_request'
+        run: node --test scripts/p4-infra.test.mjs
+      - name: Render pinned official Temporal Helm Chart (PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/src:ro" -w /src alpine/helm:3.17.3 \
+            template temporal temporal --repo https://go.temporal.io/helm-charts/ \
+            --version 1.7.0 --namespace temporal -f p4/temporal/values.yaml > /tmp/p4-temporal.yaml
+          test -s /tmp/p4-temporal.yaml
+          grep -q 'temporal-frontend' /tmp/p4-temporal.yaml
+      - name: Build standalone Temporal Activity Worker container (PR)
+        if: github.event_name == 'pull_request'
+        run: docker build -f p4/temporal/Dockerfile.worker -t portal-temporal-worker:ci .
       - name: Bootstrap initial administrator (isolated fixture database)
+        if: github.event_name == 'push'
         run: |
           timeout 45s node scripts/bootstrap-admin.mjs --email t01-admin@example.test --name "CI Test Admin" --ci-test-password 'CI-only-test-password-not-a-real-secret-123!'
       - name: Reject repeated admin bootstrap in non-interactive mode
+        if: github.event_name == 'push'
         run: |
           if timeout 20s node scripts/bootstrap-admin.mjs --email t01-admin@example.test --name "CI Test Admin" --ci-test-password 'CI-only-test-password-not-a-real-secret-123!' </dev/null; then
             echo "ERROR: bootstrap allowed duplicate admin"
             exit 1
           fi
       - name: Complete fixture administrator first password change
-        run: node scripts/run-demo.mjs scripts/prepare-test-admin.ts
+        if: github.event_name == 'push'
+        run: node scripts/run-demo.mjs
       - name: Generate auth schema reference
+        if: github.event_name == 'push'
         run: pnpm dlx auth@1.7.6 generate --adapter drizzle --dialect postgresql --config ./src/lib/auth.ts --output ./auth-schema.generated.ts --yes
       - name: Upload generated auth reference
+        if: github.event_name == 'push'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: better-auth-reference-schema
           path: auth-schema.generated.ts
       - name: Verify tracked schema and lock files
+        if: github.event_name == 'push'
         run: git diff --exit-code -- pnpm-lock.yaml drizzle/
       - name: Run PostgreSQL integration tests
+        if: github.event_name == 'push'
         run: pnpm test:db
-      - name: Type, lint, unit and build
+      - name: Verify P5 to P4 provenance gates (PR)
+        if: github.event_name == 'pull_request'
+        run: pnpm exec vitest run src/temporal/activities.test.ts src/temporal/hosted-proof.test.ts tests/hosted-dispatch.test.ts tests/hosted-log-policy.test.ts tests/hosted-runtime.test.ts
+      - name: Fast required gate - typecheck lint build
         run: |
+          node --test scripts/p4-open-promotion.test.mjs lab/test-service/server.test.mjs
           pnpm typecheck
+          pnpm temporal:bundle
           pnpm lint
-          pnpm test
           pnpm build
+      - name: Existing unit tests (master)
+        if: github.event_name == 'push'
+        run: pnpm test
       - name: Verify local lab service and Compose isolation
+        if: github.event_name == 'push'
         run: |
           node --test lab/test-service/server.test.mjs
           node --test lab/release-policy.test.mjs lab/verify-service.test.mjs
@@ -79,12 +121,16 @@ jobs:
           docker compose -p marketplace-lab --env-file lab/.env -f compose.yaml -f lab/compose.yaml config --quiet
           LAB_RELEASE_IMAGE=ghcr.io/noname4me/enterprise-app-marketplace-lab@sha256:$(printf '0%.0s' {1..64}) docker compose -p marketplace-lab-release -f lab/release.compose.yaml config --quiet
       - name: Install Chromium for end-to-end tests
+        if: github.event_name == 'push'
         run: pnpm exec playwright install --with-deps chromium
       - name: Browser end-to-end journey
+        if: github.event_name == 'push'
         run: pnpm test:e2e
       - name: Build standalone production container
+        if: github.event_name == 'push'
         run: docker build --tag marketplace:ci .
       - name: Smoke-test container using isolated CI PostgreSQL
+        if: github.event_name == 'push'
         run: |
           set -euo pipefail
           docker run --detach --rm --name marketplace-smoke --network host \

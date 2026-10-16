@@ -28,6 +28,7 @@ test("可信master完整CI通过才允许发布，拒绝PR、fork、旧SHA和失
 });
 test("部署只接受成功的可信发布run，摘要/架构/仓库/SHA/两版本身份必须一致", () => {
   assert.equal(verifyManifest(manifest, publication), manifest);
+  assert.equal(verifyManifest(manifest, { ...publication, event: "workflow_dispatch" }), manifest);
   assert.throws(() => verifyPublication({ ...publication, event: "pull_request" }));
   assert.throws(() => verifyPublication({ ...publication, conclusion: "failure" }));
   for (const patch of [{ sourceSHA: "b".repeat(40) }, { publishRunID: 14 }, { repository: "attacker/repo" }, { images: { ...manifest.images, healthy: { ...image("b"), repository: "arbitrary/image" } } }, { images: { ...manifest.images, healthy: { ...image("b"), digest: "latest" } } }, { images: { ...manifest.images, healthy: { ...image("b"), platform: "linux/amd64" } } }, { images: { healthy: image("b"), unhealthy: image("b") } }]) {

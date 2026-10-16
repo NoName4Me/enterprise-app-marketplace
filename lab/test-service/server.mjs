@@ -5,13 +5,30 @@ export function createLabServer({ mode = "local", fault = "healthy", revision = 
   if (mode !== "local") throw new Error("This service is restricted to the local lab.");
   if (!["healthy", "unhealthy"].includes(fault)) throw new Error("Unknown lab fault mode.");
   if (revision !== "local" && !/^[a-f0-9]{40}$/.test(revision)) throw new Error("Expected a full commit SHA.");
+  let requests = 0;
   return createServer((request, response) => {
+    requests++;
     response.setHeader("Content-Type", "application/json");
     response.setHeader("Cache-Control", "no-store");
     const path = new URL(request.url, "http://localhost").pathname;
-    if (request.method !== "GET" || !["/health", "/version"].includes(path)) {
+    if (request.method !== "GET" || !["/health", "/version", "/metrics"].includes(path)) {
       response.writeHead(404).end(JSON.stringify({ error: "not_found" })); return;
     }
+    if (path === "/metrics") {
+      response.setHeader("Content-Type", "text/plain; version=0.0.4");
+      response.end("# HELP marketplace_lab_health Lab service healthy=1, fault=0\n" +
+        "# TYPE marketplace_lab_health gauge\n" +
+        "marketplace_lab_health " + (fault === "healthy" ? "1" : "0") + "\n" +
+        "# TYPE marketplace_lab_info gauge\n" +
+        "marketplace_lab_info{revision=" + JSON.stringify(revision) + "} 1\n" +
+        "# TYPE marketplace_lab_requests_total counter\n" +
+        "marketplace_lab_requests_total " + requests + "\n");
+      return;
+    }
+    if (path === "/health") console.log(JSON.stringify({
+      event: "lab_health", revision, faultMode: fault,
+      status: fault === "healthy" ? 200 : 503, at: new Date().toISOString(),
+    }));
     if (path === "/version") {
       response.end(JSON.stringify({ service: "marketplace-lab", revision, environment: "local-lab", faultMode: fault })); return;
     }

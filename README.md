@@ -1,113 +1,31 @@
-# 企业内部应用市场（Enterprise App Marketplace）
+# 企业应用与软件交付协作平台
 
-> **新一轮已确认规划（2026-10-13）**：本仓库将从原有企业内部应用市场，逐步演进为**企业应用治理与 AI 自动化运维门户**。保留既有已实现功能；按 P0–P8 推进资产/生命周期、使用申请、需求中心、真实 AI 发现、运维信息聚合、人机协作 AI 开发与受控智能运维。**Agent/工作流市场暂缓，独立论坛低优先级。** 目前仍是实验项目，未完成生产部署。
+Next.js + TypeScript + PostgreSQL/Drizzle + Better Auth。已有员工应用市场、上架审核、收藏评价讨论；P1 应用资产、组件/环境、生命周期、维护工作台已合并 PR #26。真正 AI 应用发现、需求自动交付与智能运维尚未开发，非生产版本。
 
-> **当前进度**：P0-T01 已由 [PR #15](https://github.com/NoName4Me/enterprise-app-marketplace/pull/15) 修复并通过全量 CI；P0-T02 真实分支保护仍受 GitHub 二次认证阻塞，详见 [门禁证据](docs/engineering/P0_T02.md)。
+产品围绕员工 **发现应用 → 申请使用或提出需求 → 开发交付 → 持续维护** 的业务闭环协作，连接维护者、运维人员和 AI，而非重建多套专业工具。
 
-**明天交给 Work 的执行入口**：[任务包](docs/engineering/WORK_HANDOFF.md) · [优先级路线图](docs/ROADMAP.md) · [Mac mini 混合实验环境](docs/engineering/MAC_MINI_LAB.md) · [架构决策 ADR-002](docs/decisions/ADR-002-platform-evolution.md) · [验收门槛](docs/acceptance/NEXT_PHASE_GATES.md) · [候选需求池](docs/product/EXPANSION_BACKLOG.md)。
+下一主线：**P2 应用使用申请 → 审批 → 人工开通记录与结果反馈**。使用申请、需求广场、真正 AI 发现、开发者中心均保留；Agent/工作流市场和独立论坛暂缓。Mac mini M4 + OrbStack 与 GitHub Actions/GHCR 真实实验链路已打通。
 
-一个面向企业员工的内部应用市场：员工可以发现、使用、评价应用；获得创建权限的员工可以登记并提交应用，管理员审核后上架。产品参考应用商店的发现与互动机制，并支持通过自然语言查找适合的应用。
+## 活跃文档
 
-> 当前状态：**阶段 1 的登录→登记→审核→上架→浏览闭环已完成并通过 GitHub CI 与 Chromium E2E**。本地增量已加入分类、收藏、排序、编辑推荐、上下架管理、评价和应用讨论，并提供场景找应用的关键词基线。真实 AI 模型与生产交付仍未完成。[增量范围和验证限制](docs/engineering/MARKETPLACE_FEATURES.md)。
+[PRODUCT](docs/PRODUCT.md) · [ROADMAP](docs/ROADMAP.md) · [ARCHITECTURE](docs/ARCHITECTURE.md) · [ASSETS](docs/ASSETS.md) · [DEVELOPMENT](docs/DEVELOPMENT.md) · [QUALITY](docs/QUALITY.md) · [ADR-001](docs/decisions/ADR-001-technical-baseline.md) · [ADR-002](docs/decisions/ADR-002-platform-evolution.md) · [AGENTS](AGENTS.md)
 
-## 产品范围
+旧任务设计/验收/交付记录通过 Git 历史、Issue、PR、Actions 追溯，避免多个文档维护冲突信息。
 
-- **当前阶段**：只支持将已存在的 Web 应用登记到市场，不负责开发、托管或部署这些应用。
-- **应用供给**：创建草稿、提交审核、驳回重提、正式上架、更新重新审核、下架。
-- **应用消费**：分类、搜索、详情、访问、收藏、榜单与人工推荐。
-- **互动生态**：评分、评价、发布者回复、应用讨论区。
-- **AI 应用发现**：通过自然语言描述需求，推荐真实且已上架的应用并解释依据；不提供应用内操作答疑。
-- **后续方向**：独立轻论坛、多种应用类型、平台内创建应用、可见范围控制、企业统一身份等。后续方向不构成首版交付承诺。
-
-## 核心业务原则
-
-1. 新应用必须经过管理员审核才能上架。
-2. 已上架应用的更新须重新审核，审批期间线上内容和访问地址保持旧版本。
-3. 第一版所有已上架应用对已登录员工可见；门户展示权限不等于目标应用使用权限。
-4. 独立账号体系，只有获得创建权限的员工才能发布应用申请。
-5. AI 只能在当前已上架的真实应用中推荐，不能编造应用或能力。
-
-## 项目资料
-
-- [MVP 产品需求草案](docs/PRD.md)
-- [开发阶段与验收计划](docs/ROADMAP.md)
-- [已确认的产品决策](docs/decisions/README.md)
-- [阶段 0 技术设计索引](docs/design/README.md)
-- [首轮业务验收用例](docs/acceptance/MVP1.md)
-- [第一轮 Coding Agent 任务包](docs/engineering/AGENT_TASK_01.md)
-- [交付、部署与回退方案](docs/engineering/DELIVERY.md)
-- [技术选型决策 ADR-001](docs/decisions/ADR-001-technical-baseline.md)
-
-## 协作方式
-
-本项目同时用于实践 AI Native 从零到一开发：产品设计、关键决策和技术评审由对话主线完成；代码、文档、Issue 和 PR 以本仓库为事实来源。实现工作采用小批量、可验证的增量提交。阶段 0 已给出 Next.js + PostgreSQL + Better Auth + Drizzle 的首轮试行技术基线（详见 ADR-001），实际实现、测试及部署仍待后续阶段验证。
-
-## 当前不做的事
-
-现阶段不自建 GitLab/Jenkins/Kubernetes/完整监控存储，不开发 Agent/工作流市场和独立论坛。应用代码生成、自动发布和 AI 智能运维按 P5–P8 的执行权限与独立验收推进，不能把路线图当作已经落地的功能。历史阶段 0–5 的范围说明适用于 MVP-1，不应覆盖新路线图。
-
-## 许可
-
-尚未选择开源许可证。仓库公开可读不等同于授予第三方复用、修改或分发代码的许可证。
-
-## 本地快速启动（T01）
-
-需要 Node.js 22、pnpm 10.17.1、Docker / Docker Compose。
+## 本地启动
 
 ```sh
 pnpm install --frozen-lockfile
-cp .env.example .env
-# 修改 .env 中的 BETTER_AUTH_SECRET 为本地随机生成的高强度密钥
+cp -n .env.example .env
 docker compose up -d
-pnpm db:migrate
-node scripts/bootstrap-admin.mjs --email admin@example.com --name Administrator
 pnpm dev
 ```
 
-浏览器打开 `http://localhost:3000/login`，登录后进入 `/apps`；管理员可在 `/admin/users` 开通员工、停用员工及维护应用创建权限。T03/T04 已提供真实的应用登记、管理员审核及员工应用市场页面；所有操作均通过 T02 的权限与事务 API。
+已有 OrbStack/PostgreSQL 数据不得清除；仅在检查 DATABASE_URL 后迁移或引导管理员。http://localhost:3000/login 。普通功能优先真实主流程，不强制新增自动化测试；PR 轻量 CI，master 全量回归。GHCR 实验发布改为手动、以受信 master 完整 CI 为前提。
 
-**注意**：管理员初始化只可在空用户表上执行，不要使用生产密码命令行参数；首次执行时按 CLI 的交互提示输入密码。密码与 `DATABASE_URL` 等机密不能提交 GitHub。若使用其他邮箱，请替换命令中的示例地址。
+公开仓库尚无开源许可证；不提交员工数据、内部敏感资料和密钥。
+## 真实托管部署测试仓库
 
-自动化数据库集成测试会操作用户表，必须使用独立的测试数据库，不能直接对已有真实数据的开发/生产数据库执行；CI 使用独立 PostgreSQL fixture。正式上线前还需首登改密、账号恢复、最后管理员保护和浏览器 E2E 安全验收。
+推荐在 GitHub 新建独立的小型 Web 应用仓库（例如 `marketplace-e2e-web`），**不要直接用门户主仓库作为普通托管用户应用**。最小规范包括 Dockerfile、多架构 `linux/arm64` 镜像支持、`/health`、`/version`、锁定依赖、单元测试、GitHub Actions 完整 CI，主分支可信构建 GHCR 的不可变 SHA256 Digest，以及能人为触发验证失败的回归测试。不要把 Mac/Argo/Temporal 的机密加入该应用仓库。生产只能晋级已测试的**同一 Digest**，具体见 `docs/HOSTED_RELEASE.md`。
 
-详细信息：[认证与管理员初始化](docs/engineering/T01_AUTH_SETUP.md)、[T01 验证记录](docs/engineering/T01_STATUS.md)。
-
-## 服务端应用发布 API（T02）
-
-- 创建、编辑、提交与管理自己的草稿：`/api/my/apps`、`/api/my/apps/{id}`、`/api/my/apps/{id}/submit`、`/api/my/apps/{id}/draft`。
-- 管理员审核：`/api/admin/reviews`、`/api/admin/reviews/{revisionId}/approve` 或 `/reject`。
-- 员工公开查询：`/api/apps?q=`、`/api/apps/{id}`（只读取已批准且上架的版本）。
-
-详细请求、权限、返回值和验收结果见 [T02 实施记录](docs/engineering/T02_STATUS.md)、[T02 验收清单](docs/acceptance/T02_RESULTS.md)。未经认证无法使用这些接口。
-
-## 首个完整业务闭环（阶段 1）
-
-管理员在 `/admin/users` 开通员工并授予应用创建权限；发布者通过 `/my/apps` 创建草稿、提交审核并查看结果；管理员在 `/admin/reviews` 审批申请；员工可在 `/apps` 搜索、进入已上架应用详情并通过 HTTPS 外链访问。
-
-已上架应用修改信息时，必须建立新草稿并重新审核；审核期间员工始终看到之前批准的版本。
-
-### 验收与开发检查
-
-```sh
-pnpm install --frozen-lockfile
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
-```
-
-数据库测试和 Chromium E2E **只能使用隔离测试数据库**。参考 [.github/workflows/t01-compatibility.yml](.github/workflows/t01-compatibility.yml) 中的 PostgreSQL fixture、管理员初始化和端到端执行顺序，不要直接对开发或生产数据库运行含写入/清理的集成测试。
-
-本地 Chromium 测试需要先安装浏览器（`pnpm exec playwright install chromium`），并准备与 CI 等效的独立测试账号/环境；随后运行 `pnpm test:e2e`。浏览器测试以 `http://localhost:3000` 为源，必须和 `BETTER_AUTH_URL` 保持一致。
-
-- [阶段 1 浏览器验收记录](docs/acceptance/MVP1_RESULTS.md)
-- [业务领域 API 验收记录](docs/acceptance/T02_RESULTS.md)
-- [上线前安全待办](https://github.com/NoName4Me/enterprise-app-marketplace/issues/5)
-
-**限制**：当前不是生产可用版本。首次登录强制修改初始密码、最后管理员的后端保护、完整敏感操作审计及目标托管环境验证尚未完成。
-
-## 容器交付（T05）
-
-通过 Docker 多阶段构建得到非 root Node.js standalone 镜像。真实 CI 已执行镜像构建、连接 PostgreSQL 的容器启动、健康检查和匿名接口 401 验证。操作步骤、数据库迁移及回退要求见 [T05 容器交付记录](docs/engineering/T05_CONTAINER.md)。此检查不代表已部署到生产环境。
-
-账号安全：新账号首登改密、管理员限时一次性密码重置、敏感操作审计和数据库限速已实现；入口 `/account/security`、`/admin/users`，验证与生产配置边界见 [账号安全交付](docs/engineering/ACCOUNT_SECURITY.md)。
+已退役假应用 Seed；Mac 上清理历史示例数据请参考 `docs/MAC_MINI_SETUP.md` 的增量维护节。

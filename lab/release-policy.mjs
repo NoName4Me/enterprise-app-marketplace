@@ -26,7 +26,7 @@ export function verifyCI(run, jobs, expectedSHA) {
 
 export function verifyPublication(run) {
   requireValue(run.repository?.full_name === REPOSITORY && run.head_repository?.full_name === REPOSITORY, "Foreign publication repository.");
-  requireValue(run.path === RELEASE_PATH && run.event === "workflow_run" && run.head_branch === "master", "Untrusted publication workflow.");
+  requireValue(run.path === RELEASE_PATH && ["workflow_run", "workflow_dispatch"].includes(run.event) && run.head_branch === "master", "Untrusted publication workflow.");
   requireValue(run.status === "completed" && run.conclusion === "success" && SHA.test(run.head_sha), "Publication has not succeeded.");
   return run;
 }

@@ -1,9 +1,9 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { applications, appRevisions, reviewEvents, appFavorites, appFeedback, user } from "@/db/schema";
+import { applications, appRevisions, reviewEvents, appFavorites, appFeedback, appComponents, appEnvironments, componentEnvironments, externalReferences, appHostedPorts, assetEvents, appAccessRequests, requirements, appDiscussions, catalogEvents, user } from "@/db/schema";
 import { authorizeActor, type Actor } from "./actor";
 import { AppError } from "./app-errors";
-import { validateContent, type AppContent } from "./app-validation";
+import { validateContent, validateApplicationSource, type AppContent } from "./app-validation";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function uuidOr404(id: string): string {
@@ -33,13 +33,58 @@ function publicProjection() {
 /** Create a never-public application and its first editable draft. */
 export async function createApplication(actor: Actor | null, fields: Record<string, unknown>) {
   const owner = await authorizeActor(actor, "create");
-  const content = validateContent(fields);
+  const source = validateApplicationSource(fields);
+  const { sourceKind: _kind, sourceRepository: _repo, ...contentFields } = fields;
+  void _kind; void _repo;
+  const content = validateContent(contentFields);
+  if (source.sourceKind === "HOSTED" && content.targetUrl)
+    throw new AppError(422, "hosted_target_url_is_managed");
   return db.transaction(async (tx) => {
-    const [app] = await tx.insert(applications).values({ ownerUserId: owner.id }).returning();
+    const [app] = await tx.insert(applications).values({
+      ownerUserId: owner.id, sourceKind: source.sourceKind, sourceRepository: source.sourceRepository,
+      // Auto-generated managed assets are a single auditable initial asset version.
+      assetVersion: source.sourceKind === "HOSTED" ? 2 : 1,
+    }).returning();
     const [revision] = await tx.insert(appRevisions).values({
       appId: app.id, sequence: 1, createdBy: owner.id, ...content,
     }).returning();
-    return { id: app.id, revisionId: revision.id, status: revision.status };
+    if (source.sourceKind === "HOSTED") {
+      // Internal assets are generated transactionally; no manual component/environment forms.
+      const [component] = await tx.insert(appComponents).values({
+        appId: app.id, key: "web", name: "Web 应用", notes: "平台管理",
+      }).returning({ id: appComponents.id });
+      const envs = await tx.insert(appEnvironments).values([
+        {appId: app.id, key: "test", name: "测试环境", purpose: "TEST", notes: "平台管理"},
+        {appId: app.id, key: "production", name: "生产环境", purpose: "PRODUCTION", notes: "平台管理"},
+      ]).returning({ id: appEnvironments.id });
+      await tx.insert(componentEnvironments).values(envs.map(env => ({
+        appId: app.id, componentId: component.id, environmentId: env.id,
+      })));
+      await tx.insert(externalReferences).values({
+        appId: app.id, componentId: component.id, resourceKind: "REPOSITORY",
+        provider: "GITHUB", repositoryFullName: source.sourceRepository!,
+      });
+      // Serialize allocations within the existing PostgreSQL instance.
+      // Kubernetes NodePort conflicts are still validated at actual deployment.
+      await tx.execute(sql`select pg_advisory_xact_lock(75190061)`);
+      const taken=await tx.select({port:appHostedPorts.nodePort}).from(appHostedPorts);
+      const occupied=new Set(taken.map(item=>item.port));
+      const free:number[]=[];
+      for(let port=31000;port<=31999&&free.length<2;port++) {
+        if(!occupied.has(port))free.push(port);
+      }
+      if(free.length!==2)throw new AppError(409,"hosted_nodeports_exhausted");
+      await tx.insert(appHostedPorts).values([
+        {appId:app.id,environment:"TEST",nodePort:free[0]},
+        {appId:app.id,environment:"PRODUCTION",nodePort:free[1]},
+      ]);
+      await tx.insert(assetEvents).values({
+        appId:app.id,actorUserId:owner.id,action:"CREATED",
+        resourceType:"application",resourceId:app.id,assetVersionAfter:app.assetVersion,
+        reason:"系统依据 GitHub 托管来源建立组件、测试/生产环境与端口预约",
+      });
+    }
+    return { id: app.id, revisionId: revision.id, status: revision.status, sourceKind: source.sourceKind };
   });
 }
 
@@ -47,7 +92,7 @@ export async function listOwnedApplications(actor: Actor | null) {
   const owner = await authorizeActor(actor, "active");
   const apps = await db.select({
     id: applications.id, lifecycleStatus: applications.lifecycleStatus, listingStatus: applications.listingStatus,
-    publishedRevisionId: applications.publishedRevisionId,
+    publishedRevisionId: applications.publishedRevisionId, sourceKind: applications.sourceKind,
   }).from(applications).where(eq(applications.ownerUserId, owner.id))
     .orderBy(desc(applications.createdAt)).limit(50);
   if (apps.length === 0) return [];
@@ -76,7 +121,23 @@ export async function getOwnedApplication(actor: Actor | null, appId: string) {
   if (!app) throw new AppError(404, "not_found");
   const revisions = await db.select().from(appRevisions)
     .where(eq(appRevisions.appId, app.id)).orderBy(desc(appRevisions.sequence));
-  return { id: app.id, lifecycleStatus: app.lifecycleStatus, listingStatus: app.listingStatus,
+  const reserved=app.sourceKind==="HOSTED"
+    ? await db.select({
+      environment:appHostedPorts.environment,port:appHostedPorts.nodePort,
+      state:appHostedPorts.state,imageDigest:appHostedPorts.imageDigest,
+      verifiedAt:appHostedPorts.verifiedAt,
+    }).from(appHostedPorts).where(eq(appHostedPorts.appId,app.id)) : [];
+  const ip=process.env.HOSTED_PUBLIC_IP?.trim()??"";
+  const validIPv4=ip.split(".").length===4&&ip.split(".").every(segment=>
+    /^[0-9]{1,3}$/.test(segment)&&Number(segment)<=255
+  );
+  const hostedEndpoints=reserved.map(endpoint=>({
+    ...endpoint,
+    url:endpoint.state==="READY"&&endpoint.verifiedAt&&validIPv4
+      ? "http://"+ip+":"+endpoint.port : null,
+  }));
+  return { hostedEndpoints, id: app.id, lifecycleStatus: app.lifecycleStatus, listingStatus: app.listingStatus,
+    sourceKind: app.sourceKind, sourceRepository: app.sourceRepository,
     publishedRevisionId: app.publishedRevisionId,
     revisions: revisions.map((r) => ({
       id: r.id, sequence: r.sequence, status: r.status, ...contentFromRevision(r),
@@ -84,6 +145,96 @@ export async function getOwnedApplication(actor: Actor | null, appId: string) {
       rejectionReason: r.rejectionReason,
     })),
   };
+}
+
+/** Hard-delete only a never-submitted draft that has no external side effects.
+ *  A published app's new DRAFT revision is never eligible for this operation.
+ *  Database FK restrictions provide an additional safety net for new relations.
+ */
+export async function deleteNewDraft(actor: Actor | null, appId: string) {
+  const owner = await authorizeActor(actor, "create");
+  uuidOr404(appId);
+  return db.transaction(async tx => {
+    const [app] = await tx.select().from(applications)
+      .where(eq(applications.id, appId)).for("update");
+    if (!app || app.ownerUserId !== owner.id) throw new AppError(404, "not_found");
+    if (app.listingStatus !== "UNLISTED" || app.publishedRevisionId ||
+      app.featured || app.lifecycleStatus !== "UNKNOWN")
+      throw new AppError(409, "draft_delete_forbidden");
+
+    const revisions = await tx.select({
+      id: appRevisions.id, sequence: appRevisions.sequence, status: appRevisions.status,
+      submittedAt: appRevisions.submittedAt, reviewedAt: appRevisions.reviewedAt,
+    }).from(appRevisions).where(eq(appRevisions.appId, appId));
+    if (revisions.length !== 1 || revisions[0].sequence !== 1 ||
+      revisions[0].status !== "DRAFT" || revisions[0].submittedAt || revisions[0].reviewedAt)
+      throw new AppError(409, "draft_delete_forbidden");
+
+    // In particular, never delete workflow history, access approvals, employee
+    // requests, feedback or an app that has entered a real deployment.
+    const [reviews, accesses, reqs, favorites, feedback, discussions, catalog] = await Promise.all([
+      tx.select({id:reviewEvents.id}).from(reviewEvents).where(eq(reviewEvents.appId, appId)),
+      tx.select({id:appAccessRequests.id}).from(appAccessRequests).where(eq(appAccessRequests.appId, appId)),
+      tx.select({id:requirements.id}).from(requirements).where(eq(requirements.appId, appId)),
+      tx.select({userId:appFavorites.userId}).from(appFavorites).where(eq(appFavorites.appId, appId)),
+      tx.select({id:appFeedback.id}).from(appFeedback).where(eq(appFeedback.appId, appId)),
+      tx.select({id:appDiscussions.id}).from(appDiscussions).where(eq(appDiscussions.appId, appId)),
+      tx.select({id:catalogEvents.id}).from(catalogEvents).where(eq(catalogEvents.appId, appId)),
+    ]);
+    if ([reviews, accesses, reqs, favorites, feedback, discussions, catalog].some(rows => rows.length))
+      throw new AppError(409, "draft_delete_has_history");
+
+    const [components, environments, bindings, refs, ports, events] = await Promise.all([
+      tx.select().from(appComponents).where(eq(appComponents.appId, appId)),
+      tx.select().from(appEnvironments).where(eq(appEnvironments.appId, appId)),
+      tx.select().from(componentEnvironments).where(eq(componentEnvironments.appId, appId)),
+      tx.select().from(externalReferences).where(eq(externalReferences.appId, appId)),
+      tx.select().from(appHostedPorts).where(eq(appHostedPorts.appId, appId)),
+      tx.select().from(assetEvents).where(eq(assetEvents.appId, appId)),
+    ]);
+    if (app.sourceKind === "EXTERNAL") {
+      if (app.assetVersion !== 1 ||
+        [components,environments,bindings,refs,ports,events].some(rows => rows.length))
+        throw new AppError(409, "draft_delete_has_history");
+    } else {
+      // Only platform-created, untouched managed resources can be removed.
+      const comp = components[0], envIds = new Set(environments.map(e => e.id));
+      const generated = components.length === 1 && comp.key === "web" && !comp.archivedAt &&
+        environments.length === 2 && environments.every(e => !e.archivedAt &&
+          ((e.key === "test" && e.purpose === "TEST") ||
+           (e.key === "production" && e.purpose === "PRODUCTION"))) &&
+        new Set(environments.map(e => e.purpose)).size === 2 &&
+        bindings.length === 2 && bindings.every(b => !b.archivedAt &&
+          b.componentId === comp.id && envIds.has(b.environmentId)) &&
+        new Set(bindings.map(b => b.environmentId)).size === 2 &&
+        refs.length === 1 && refs[0].componentId === comp.id && !refs[0].bindingId &&
+          refs[0].resourceKind === "REPOSITORY" && refs[0].repositoryFullName === app.sourceRepository &&
+          !refs[0].archivedAt &&
+        ports.length === 2 && ports.every(port => port.state === "RESERVED" &&
+          !port.imageDigest && !port.verifiedAt) &&
+        new Set(ports.map(port => port.environment)).size === 2 &&
+        ports.some(port => port.environment === "TEST") &&
+        ports.some(port => port.environment === "PRODUCTION");
+      const auditIsInitial = app.assetVersion === 2 && events.length === 1 &&
+        events[0].action === "CREATED" && events[0].resourceType === "application" &&
+        events[0].resourceId === app.id && events[0].actorUserId === owner.id &&
+        events[0].assetVersionAfter === 2;
+      if (!generated || !auditIsInitial)
+        throw new AppError(409, "draft_delete_has_history");
+    }
+
+    // Foreign-key-safe order; delete of the root app is always last.
+    await tx.delete(assetEvents).where(eq(assetEvents.appId, appId));
+    await tx.delete(externalReferences).where(eq(externalReferences.appId, appId));
+    await tx.delete(componentEnvironments).where(eq(componentEnvironments.appId, appId));
+    await tx.delete(appHostedPorts).where(eq(appHostedPorts.appId, appId));
+    await tx.delete(appEnvironments).where(eq(appEnvironments.appId, appId));
+    await tx.delete(appComponents).where(eq(appComponents.appId, appId));
+    const [deleted] = await tx.delete(applications).where(eq(applications.id, appId))
+      .returning({id:applications.id});
+    if (!deleted) throw new AppError(409, "draft_delete_conflict");
+    return {id:deleted.id, deleted:true};
+  });
 }
 
 export async function editDraft(
@@ -146,6 +297,7 @@ export async function submitDraft(actor: Actor | null, appId: string) {
       .where(and(eq(appRevisions.appId, appId), eq(appRevisions.status, "DRAFT")))
       .limit(1).for("update");
     if (!draft) throw new AppError(409, "no_editable_draft");
+    if (app.sourceKind === "HOSTED") throw new AppError(409, "hosted_production_not_deployed");
     validateContent({}, contentFromRevision(draft), true);
     const [submitted] = await tx.update(appRevisions).set({
       status: "PENDING", submittedAt: new Date(),
