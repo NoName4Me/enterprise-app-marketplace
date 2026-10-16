@@ -51,7 +51,7 @@ kubectl get svc -A -o wide
 - **源仓库管理员必须人工将包含该提交的 `dev` 历史晋级到 `master`，并通过该仓库 `master` 的完整 push CI。** 平台不会合并 PR、修改分支或绕过审核。源仓库若将 dev squash/cherry-pick 到 master，Git 祖先关系丢失，平台将拒绝此次自动衔接；可走独立 P4 测试发布并人工核对，不伪造需求关联证明。
 - 点击需求页「部署此需求到 TEST」后，后端重查当前 owner、唯一受信仓库、Temporal 已验证的 PR SHA；仅通过服务端参数创建带 `requirement_id` 的发布账本。Worker 在任何远端构建 POST 之前，对 GitHub 当前 `master` HEAD 做 compare 祖先核验。构建模板还会要求该 HEAD 的成功完整 CI 与原 SHA 一致，镜像始终按不可变 Digest 经独立 GitOps PR 审核部署。
 - 需求页显示同一需求关联的 TEST 发布记录和 GitOps 审核链接。发布进入 READY 后也**不自动生产晋级**。P5 已在旧版运行并缺少已核验合并 SHA 的历史任务不得自动升级到此流程，需从应用发布页手工操作。
-- 本改动需要在**现有 market 备份与隔离库校验通过后**仅增量执行 `0012_delivery_release_link`；不要重建 PostgreSQL、Temporal、Argo 或任何现有卷。更新 Portal 与 Worker 镜像后再使用；工作流升级需谨慎处理尚在运行的老版本历史。
+- 本改动需要在**现有 market 备份与隔离库校验通过后**仅增量执行 `0012_delivery_release_link`；不要重建 PostgreSQL、Temporal、Argo 或任何现有卷。**先升级 Temporal Activity Worker 并确认 Ready，再升级 Portal**。需求 TEST 发布使用新版 `verifiedHostedReleaseWorkflow`；旧 Worker 不认识该类型时只能等待，不能作为旧版无祖先校验的发布任务运行。仍需谨慎处理尚在运行的老版本工作流历史。
 
 ## 尚未完成与验收状态
 
