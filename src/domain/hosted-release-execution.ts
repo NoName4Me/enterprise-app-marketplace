@@ -4,6 +4,7 @@ import {applications} from "@/db/schema";
 import type {Actor} from "./actor";
 import {AppError} from "./app-errors";
 import {inspectHostedRelease} from "./hosted-release-service";
+import {allowedHostedLogLocation} from "./hosted-log-policy";
 
 const REPO=/^[a-zA-Z0-9-]{1,39}\/[a-zA-Z0-9_.-]{1,100}$/;
 const JOB=/^[1-9][0-9]{0,18}$/;
@@ -70,16 +71,6 @@ export async function getHostedExecution(actor:Actor|null,appId:string,releaseId
   const build=await jobsFor(repo,release.buildRunId);
   return {release,snapshot,build,observedAt:new Date().toISOString()};
 }
-function allowedLogHost(value:string){
-  try{
-    const u=new URL(value);
-    if(u.protocol!=="https:"||u.username||u.password||u.port)return false;
-    const host=u.hostname.toLowerCase();
-    return host==="pipelines.actions.githubusercontent.com"||
-      host.endsWith(".actions.githubusercontent.com")||
-      host.endsWith(".blob.core.windows.net");
-  }catch{return false;}
-}
 async function boundedText(response:Response){
   const reader=response.body?.getReader();
   if(!reader)return "";
@@ -109,7 +100,7 @@ export async function readHostedJobLog(actor:Actor|null,appId:string,releaseId:s
     const response=await github("/repos/"+repo+"/actions/jobs/"+jobId+"/logs","manual");
     if(response.status!==302)return {state:"NOT_READY",text:"",note:"GitHub 暂未提供该作业的日志"};
     const target=response.headers.get("location")??"";
-    if(!allowedLogHost(target))return {state:"UNAVAILABLE",text:"",note:"GitHub 日志下载地址未通过安全校验"};
+    if(!allowedHostedLogLocation(target))return {state:"UNAVAILABLE",text:"",note:"GitHub 日志下载地址未通过安全校验"};
     const file=await fetch(target,{redirect:"error",cache:"no-store",
       signal:AbortSignal.timeout(15000)});
     if(!file.ok)return {state:"NOT_READY",text:"",note:"日志尚未可下载"};
